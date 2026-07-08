@@ -1,0 +1,786 @@
+// BIDS Display - Dark Mode
+
+.bids-display {
+  min-height: 100vh;
+  background: #0a1929;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  font-family: Arial, sans-serif;
+  box-sizing: border-box;
+  border: 0 solid transparent;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.bids-display.connection-lost {
+  border: 10px solid #dc2626;
+  box-shadow: inset 0 0 0 4px rgba(220, 38, 38, 0.35);
+}
+
+.header {
+  background: #0d2847;
+  padding: 20px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 3px solid #1e88e5;
+
+  .header-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: 1px;
+  }
+
+  .header-time {
+    text-align: right;
+
+    .date {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+
+    .time {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: 1px;
+    }
+  }
+}
+
+.content {
+  flex: 1;
+  padding: 30px 40px;
+  overflow: hidden;
+}
+
+.content.split-layout {
+  padding: 20px 30px;
+}
+
+.content.hybrid-alternate-ad {
+  padding: 0;
+
+  .ads-only-container,
+  .ads-only-placeholder {
+    padding: 0;
+    border-radius: 0;
+    max-height: 100vh;
+    width: 100%;
+    height: 100%;
+  }
+
+  .ads-only-container {
+    img,
+    video {
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+  }
+}
+
+.debug-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 8px 16px;
+  background: rgba(2, 132, 199, 0.2);
+  border-top: 1px solid rgba(56, 189, 248, 0.35);
+  border-bottom: 1px solid rgba(56, 189, 248, 0.35);
+  color: #e0f2fe;
+  font-size: 0.8rem;
+  font-weight: 600;
+
+  span {
+    white-space: nowrap;
+  }
+}
+
+.broadcast-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: linear-gradient(90deg, #7f1d1d 0%, #b91c1c 60%, #dc2626 100%);
+  border-top: 1px solid rgba(254, 202, 202, 0.5);
+  border-bottom: 1px solid rgba(254, 202, 202, 0.5);
+}
+
+.broadcast-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fee2e2;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.broadcast-text {
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.schedule-layout {
+  display: block;
+  height: 100%;
+}
+
+.schedule-column {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ad-caption {
+  margin-top: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #e2e8f0;
+  text-align: center;
+}
+
+.ad-empty-state {
+  flex: 1;
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+  color: #94a3b8;
+  font-size: 1rem;
+}
+
+.ads-only-layout {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 400px;
+
+  .ads-waiting-message {
+    padding: 40px;
+    background: rgba(30, 136, 229, 0.1);
+    border: 2px dashed rgba(30, 136, 229, 0.3);
+    border-radius: 8px;
+
+    p {
+      margin: 10px 0;
+      font-size: 1.2rem;
+      color: #94a3b8;
+
+      &:first-child {
+        font-size: 1.5rem;
+        color: #ffffff;
+        font-weight: 700;
+      }
+    }
+  }
+}
+
+.ads-only-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 30px;
+  background: #000000;
+  border-radius: 8px;
+  max-height: calc(100vh - 200px);
+
+  img,
+  video {
+    max-width: 100%;
+    max-height: 80%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+}
+
+.ads-only-caption {
+  margin-top: 16px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-align: center;
+  max-width: 100%;
+  word-wrap: break-word;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.ads-only-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 30px;
+  background: #000000;
+  border-radius: 8px;
+  min-height: 300px;
+  color: #94a3b8;
+  font-size: 1rem;
+
+  p {
+    margin: 0;
+  }
+}
+
+.ad-playback-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ad-playback-frame {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #000000;
+
+  img,
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .ad-caption {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    margin-top: 0;
+    text-align: center;
+    font-size: 1.1rem;
+    color: #f8fafc;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+  }
+}
+
+.section {
+  min-width: 0;
+}
+
+.section {
+  .section-header {
+    background: #1e88e5;
+    color: #ffffff;
+    padding: 12px 20px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    border-radius: 4px 4px 0 0;
+  }
+
+  .table-wrapper {
+    background: #0d2847;
+    border-radius: 0 0 4px 4px;
+    overflow: hidden;
+  }
+}
+
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+
+  thead {
+    background: #154569;
+
+    th {
+      padding: 14px 20px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: #ffffff;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid #1e88e5;
+
+      &:nth-child(1) { width: 12%; } // TIME
+      &:nth-child(2) { width: 13%; } // BUS NO
+      &:nth-child(3) { width: 15%; } // ROUTE NUMBER
+      &:nth-child(4) { width: 30%; } // DESTINATION/ORIGIN
+      &:nth-child(5) { width: 30%; } // REMARKS
+    }
+  }
+
+  tbody {
+    tr {
+      border-bottom: 1px solid #1a3a52;
+      transition: background 0.2s ease;
+
+      &:hover {
+        background: #122e47;
+      }
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      &.has-indicator {
+        td:first-child {
+          position: relative;
+        }
+      }
+
+      td {
+        padding: 6px 20px;
+        color: #ffffff;
+        font-size: 1rem;
+        font-weight: 500;
+
+        .indicator {
+          color: #22c55e;
+          font-size: 0.8rem;
+          margin-right: 8px;
+          animation: pulse 2s infinite;
+        }
+      }
+    }
+  }
+}
+
+.remark {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+
+  &.departed {
+    color: #94a3b8;
+  }
+
+  &.checkin {
+    color: #f59e0b;
+  }
+
+  &.delay {
+    color: #ef4444;
+  }
+
+  &.ontime {
+    color: #22c55e;
+  }
+
+  &.arrived {
+    color: #22c55e;
+  }
+
+  &.expected {
+    color: #22c55e;
+  }
+
+  &.delayed {
+    color: #ef4444;
+  }
+}
+
+.footer {
+  background: #1e88e5;
+  padding: 20px 40px;
+  text-align: center;
+
+  .footer-text {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: 2px;
+  }
+}
+
+/* 24"/32" class TVs (typically 1366x768): tighten spacing so tables stay readable */
+@media (max-width: 1366px), (max-height: 768px) {
+  .header {
+    padding: 14px 22px;
+
+    .header-title {
+      font-size: 1.45rem;
+    }
+
+    .header-time {
+      .date {
+        font-size: 0.8rem;
+      }
+
+      .time {
+        font-size: 1.45rem;
+      }
+    }
+  }
+
+  .content {
+    padding: 16px 20px;
+  }
+
+  .section .section-header {
+    padding: 10px 14px;
+    font-size: 0.95rem;
+  }
+
+  .schedule-table {
+    thead th {
+      padding: 10px 12px;
+      font-size: 0.74rem;
+    }
+
+    tbody td {
+      padding: 6px 12px;
+      font-size: 0.84rem;
+    }
+  }
+
+  .footer {
+    padding: 12px 20px;
+
+    .footer-text {
+      font-size: 1rem;
+      letter-spacing: 1px;
+    }
+  }
+
+  .debug-line {
+    font-size: 0.7rem;
+    gap: 8px;
+    padding: 6px 10px;
+  }
+
+  .split-left {
+    flex: 0 0 60%;
+    width: 60%;
+  }
+
+  .split-right {
+    flex: 0 0 40%;
+    width: 40%;
+  }
+
+  .split-ad-caption {
+    font-size: 0.75rem;
+  }
+
+  .ads-only-container {
+    max-height: calc(100vh - 160px);
+    padding: 16px;
+  }
+
+  .ads-only-container img,
+  .ads-only-container video {
+    max-height: 75%;
+  }
+
+  .ads-only-caption {
+    font-size: 0.8rem;
+    margin-top: 12px;
+  }
+
+  .ads-only-placeholder {
+    min-height: 200px;
+    font-size: 0.9rem;
+  }
+}
+
+/* 65"/75" class TVs (typically 4K): scale up typography and spacing */
+@media (min-width: 2560px), (min-height: 1440px) {
+  .header {
+    padding: 28px 64px;
+
+    .header-title {
+      font-size: 2.4rem;
+    }
+
+    .header-time {
+      .date {
+        font-size: 1.15rem;
+      }
+
+      .time {
+        font-size: 2.5rem;
+      }
+    }
+  }
+
+  .content {
+    padding: 40px 64px;
+  }
+
+  .section .section-header {
+    padding: 16px 24px;
+    font-size: 1.35rem;
+  }
+
+  .schedule-table {
+    thead th {
+      padding: 18px 24px;
+      font-size: 1.08rem;
+    }
+
+    tbody td {
+      padding: 10px 24px;
+      font-size: 1.12rem;
+    }
+  }
+
+  .footer {
+    padding: 24px 64px;
+
+    .footer-text {
+      font-size: 1.7rem;
+    }
+  }
+
+  .debug-line {
+    font-size: 0.95rem;
+    padding: 10px 18px;
+  }
+
+  .ad-playback-frame .ad-caption {
+    font-size: 1.5rem;
+    bottom: 28px;
+  }
+
+  .split-ad-caption {
+    font-size: 1.1rem;
+  }
+
+  .split-ad-container img,
+  .split-ad-container video {
+    max-height: 90%;
+  }
+
+  .ads-only-container {
+    max-height: calc(100vh - 240px);
+    padding: 40px;
+  }
+
+  .ads-only-container img,
+  .ads-only-container video {
+    max-height: 85%;
+  }
+
+  .ads-only-caption {
+    font-size: 1.2rem;
+    margin-top: 20px;
+  }
+
+  .ads-only-placeholder {
+    min-height: 400px;
+    font-size: 1.2rem;
+  }
+}
+
+/* Split Screen Layout: 2/3 schedules, 1/3 ads */
+.split-container {
+  display: flex;
+  gap: 20px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.split-container.vertical {
+  flex-direction: column;
+}
+
+.split-left {
+  flex: 0 0 66.666%;
+  width: 66.666%;
+  overflow-y: auto;
+  padding-right: 10px;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(30, 136, 229, 0.1);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(30, 136, 229, 0.5);
+    border-radius: 4px;
+
+    &:hover {
+      background: rgba(30, 136, 229, 0.7);
+    }
+  }
+}
+
+.split-right {
+  flex: 0 0 33.334%;
+  width: 33.334%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: #000000;
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 16px;
+}
+
+/* Vertical (portrait) split: schedules on top, ads on bottom */
+.split-container.vertical .split-left {
+  flex: 2 1 70%;
+  width: 100%;
+}
+
+.split-container.vertical .split-right {
+  flex: 1 1 30%;
+  width: 100%;
+}
+
+.split-ad-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  background: #000000;
+  border-radius: 4px;
+  overflow: hidden;
+
+  img,
+  video {
+    max-width: 100%;
+    max-height: 85%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+}
+
+.split-ad-caption {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-align: center;
+  max-width: 100%;
+  word-wrap: break-word;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.split-ad-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 0.95rem;
+
+  p {
+    margin: 0;
+  }
+}
+
+/* Ultra 4K panels */
+@media (min-width: 3840px) {
+  .header .header-title {
+    font-size: 2.8rem;
+  }
+
+  .header .header-time .time {
+    font-size: 3rem;
+  }
+
+  .schedule-table thead th {
+    font-size: 1.2rem;
+  }
+
+  .schedule-table tbody td {
+    font-size: 1.24rem;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 15px 20px;
+    flex-direction: column;
+    gap: 10px;
+
+    .header-title {
+      font-size: 1.3rem;
+    }
+
+    .header-time {
+      text-align: center;
+
+      .time {
+        font-size: 1.5rem;
+      }
+    }
+  }
+
+  .content {
+    padding: 20px 15px;
+  }
+
+  .debug-line {
+    gap: 8px;
+    font-size: 0.72rem;
+  }
+
+  .schedule-layout {
+    display: block;
+  }
+
+  .schedule-column {
+    gap: 16px;
+  }
+
+  .section {
+    .section-header {
+      padding: 10px 15px;
+      font-size: 1rem;
+    }
+  }
+
+  .schedule-table {
+    thead th {
+      padding: 10px 12px;
+      font-size: 0.75rem;
+    }
+
+    tbody td {
+      padding: 12px;
+      font-size: 0.85rem;
+    }
+  }
+
+  .footer {
+    padding: 15px 20px;
+
+    .footer-text {
+      font-size: 1rem;
+    }
+  }
+}

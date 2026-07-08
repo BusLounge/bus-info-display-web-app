@@ -1,0 +1,86 @@
+<div class="lounge-page">
+  <app-header></app-header>
+
+  <main class="lounge-content">
+    <section class="page-intro">
+      <h1>Lounge Route Segment Validation</h1>
+      <p>Validate each lounge route segment and show invalid stop mappings immediately.</p>
+
+      <div class="intro-actions">
+        <button class="btn-primary" (click)="validateAllLounges()" [disabled]="isLoadingLounges || isValidatingAll || !lounges.length">
+          {{ isValidatingAll ? 'Validating all lounges...' : 'Validate All Lounges' }}
+        </button>
+        <button class="btn-secondary" (click)="loadLounges()" [disabled]="isLoadingLounges">
+          {{ isLoadingLounges ? 'Refreshing lounges...' : 'Refresh Lounges' }}
+        </button>
+      </div>
+
+      <div class="summary" *ngIf="getValidatedLoungeCount() > 0">
+        <span>Validated lounges: {{ getValidatedLoungeCount() }}</span>
+        <span>Lounges with invalid segments: {{ getInvalidLoungeCount() }}</span>
+      </div>
+    </section>
+
+    <section *ngIf="error" class="error-box">
+      <p>{{ error }}</p>
+    </section>
+
+    <section *ngIf="isLoadingLounges" class="loading-box">
+      <p>Loading lounge list...</p>
+    </section>
+
+    <section *ngIf="!isLoadingLounges && !error" class="lounge-list">
+      <article class="lounge-card" *ngFor="let lounge of lounges">
+        <header class="lounge-card__header">
+          <div>
+            <h2>{{ lounge.loungeName }}</h2>
+            <p class="lounge-card__meta">ID: {{ lounge.id }}</p>
+          </div>
+
+          <div class="lounge-card__actions">
+            <button class="btn-primary" (click)="validateLounge(lounge.id)" [disabled]="isValidating(lounge.id)">
+              {{ isValidating(lounge.id) ? 'Validating...' : 'Validate' }}
+            </button>
+          </div>
+        </header>
+
+        <ng-container *ngIf="getValidationResult(lounge.id) as result">
+          <div class="status-row">
+            <span class="status-pill" [class.status-pill--valid]="result.isValid" [class.status-pill--invalid]="!result.isValid">
+              {{ result.isValid ? 'Valid' : 'Invalid' }}
+            </span>
+            <span class="status-detail">Segments checked: {{ result.segments.length }}</span>
+            <span class="status-detail" *ngIf="!result.isValid">Invalid segments: {{ getInvalidSegments(lounge.id).length }}</span>
+          </div>
+
+          <div class="invalid-table" *ngIf="getInvalidSegments(lounge.id).length > 0">
+            <table>
+              <thead>
+                <tr>
+                  <th>Route</th>
+                  <th>Stop Before</th>
+                  <th>Stop After</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let segment of getInvalidSegments(lounge.id)">
+                  <td>{{ segment.routeNumber || segment.masterRouteId }}</td>
+                  <td>
+                    {{ segment.stopBeforeName || segment.stopBeforeId }}
+                    <span *ngIf="segment.stopBeforeOrder !== undefined">(order {{ segment.stopBeforeOrder }})</span>
+                  </td>
+                  <td>
+                    {{ segment.stopAfterName || segment.stopAfterId }}
+                    <span *ngIf="segment.stopAfterOrder !== undefined">(order {{ segment.stopAfterOrder }})</span>
+                  </td>
+                  <td>{{ segment.reason }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </ng-container>
+      </article>
+    </section>
+  </main>
+</div>

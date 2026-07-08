@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b1120;
+            --card-bg: transparent; /* Assuming no card bg based on screenshot */
+            --input-bg: #1f2937;
+            --text-main: #ffffff;
+            --text-muted: #9ca3af;
+            --accent-blue: #38bdf8;
+            --border-color: #374151;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 40px 20px;
+            box-sizing: border-box;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 0% 100%, rgba(56, 189, 248, 0.1) 0%, transparent 50%);
+            color: var(--text-main);
+        }
+
+        #admin-form {
+            width: 100%;
+            max-width: 480px;
+        }
+
+        .section-header {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 24px;
+            margin-top: 32px;
+        }
+
+        .section-header:first-child {
+            margin-top: 0;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            width: 100%;
+            margin-bottom: 16px;
+        }
+
+        .form-row .form-group {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.875rem;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 14px 16px;
+            box-sizing: border-box;
+            background: var(--input-bg);
+            border: 1px solid transparent;
+            border-radius: 12px;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            appearance: none;
+        }
+
+        /* Custom dropdown arrow for select */
+        select {
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            background-size: 16px;
+            padding-right: 40px;
+        }
+
+        input::placeholder {
+            color: #6b7280;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--border-color);
+            background: #273142;
+        }
+
+        select option {
+            background-color: var(--input-bg);
+            color: var(--text-main);
+        }
+
+        button[type="submit"] {
+            width: 100%;
+            padding: 14px;
+            margin-top: 32px;
+            background-color: var(--accent-blue);
+            color: #000;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            font-family: inherit;
+        }
+
+        button[type="submit"]:hover {
+            opacity: 0.9;
+        }
+
+        @media (max-width: 480px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <form id="admin-form">
+        <div class="section-header">IDENTIFICATION</div>
+        
+        <div class="form-group">
+            <label for="loungeId">Lounge ID</label>
+            <input type="text" id="loungeId" name="loungeId" placeholder="e.g. 998a4798-86a1-4136..." required>
+        </div>
+        
+        <div class="form-group">
+            <label for="loungeName">Lounge Name</label>
+            <input type="text" id="loungeName" name="loungeName" placeholder="e.g. Main Hub" required>
+        </div>
+        
+        <div class="section-header">DISPLAY SETTINGS</div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="displayMode">Display Mode</label>
+                <select id="displayMode" name="displayMode">
+                    <option value="schedules-only">Schedules Only</option>
+                    <option value="ads-only">Advertisements Only</option>
+                    <option value="both">Both (Hybrid)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="layoutMode">Layout Mode</label>
+                <select id="layoutMode" name="layoutMode">
+                    <option value="split-screen">Split Screen</option>
+                    <option value="full-screen-alternate">Full Screen Alternate</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="language">Language</label>
+            <select id="language" name="language">
+                <option value="en">English</option>
+                <option value="si">Sinhala</option>
+                <option value="ta">Tamil</option>
+            </select>
+        </div>
+
+        <div class="section-header">DEVICE SETTINGS</div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="syncFrequencySeconds">Sync Frequency (sec)</label>
+                <input type="number" id="syncFrequencySeconds" name="syncFrequencySeconds" min="5" step="1" value="30">
+            </div>
+            <div class="form-group">
+                <label for="displayResolution">Display Resolution</label>
+                <select id="displayResolution" name="displayResolution">
+                    <option value="1280x720">HD / 720p - 1280 × 720</option>
+                    <option value="1920x1080" selected>Full HD / 1080p - 1920 × 1080</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="displayOrientation">Display Orientation</label>
+                <select id="displayOrientation" name="displayOrientation">
+                    <option value="landscape" selected>Landscape</option>
+                    <option value="portrait">Portrait</option>
+                </select>
+            </div>
+        </div>
+        
+        <button type="submit">Save Configuration</button>
+    </form>
+
+    <script>
+        const displayModeSelect = document.getElementById('displayMode');
+        const layoutModeSelect = document.getElementById('layoutMode');
+
+        function toggleLayoutMode() {
+            if (displayModeSelect.value === 'both') {
+                layoutModeSelect.disabled = false;
+                layoutModeSelect.style.opacity = '1';
+            } else {
+                layoutModeSelect.disabled = true;
+                layoutModeSelect.style.opacity = '0.5';
+            }
+        }
+
+        displayModeSelect.addEventListener('change', toggleLayoutMode);
+
+        // Initial check on page load
+        toggleLayoutMode();
+
+        document.getElementById('admin-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const credentials = {
+                loungeId: document.getElementById('loungeId').value,
+                loungeName: document.getElementById('loungeName').value,
+                displayMode: document.getElementById('displayMode').value,
+                layoutMode: layoutModeSelect.disabled ? '' : layoutModeSelect.value,
+                language: document.getElementById('language').value,
+                displayOrientation: document.getElementById('displayOrientation').value,
+                syncFrequencySeconds: document.getElementById('syncFrequencySeconds').value,
+                displayResolution: document.getElementById('displayResolution').value,
+            };
+            window.electron.submitCredentials(credentials);
+        });
+    </script>
+</body>
+</html>

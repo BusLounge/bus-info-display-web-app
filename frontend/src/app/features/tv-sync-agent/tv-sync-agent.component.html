@@ -1,0 +1,889 @@
+<div class="tv-sync-agent">
+  <!-- Header -->
+  <header class="agent-header">
+    <div class="header-content">
+      <div class="title-section">
+        <h1 class="main-title">
+          <span class="icon">📺</span>
+          TV Sync Agent
+        </h1>
+        <p class="subtitle">Manage your lounge displays and content</p>
+      </div>
+
+      <div class="header-actions">
+        @if (selectedLounge()) {
+        <button class="btn btn-primary" (click)="syncNow()" [disabled]="syncProgress() > 0">
+          <span class="icon">{{ syncProgress() > 0 ? '↻' : '🔄' }}</span>
+          {{ syncProgress() > 0 ? 'Syncing...' : 'Sync Now' }}
+        </button>
+        }
+
+        <div class="lounge-selector">
+          <label>Select Lounge:</label>
+          <select (change)="selectLounge(lounges()[$any($event.target).value])" class="select-input">
+            @for (lounge of lounges(); track lounge.id; let i = $index) {
+            <option [value]="i" [selected]="selectedLounge()?.id === lounge.id">
+              {{ lounge.loungeName }}
+            </option>
+            }
+          </select>
+        </div>
+      </div>
+    </div>
+
+    @if (syncProgress() > 0) {
+    <div class="progress-bar">
+      <div class="progress-fill" [style.width.%]="syncProgress()"></div>
+    </div>
+    }
+  </header>
+
+  <!-- Main Content -->
+  <div class="agent-content">
+    @if (isLoading()) {
+    <div class="loading-overlay">
+      <div class="spinner"></div>
+      <p>Loading...</p>
+    </div>
+    }
+
+    <!-- Lounge Info Card -->
+    @if (selectedLounge()) {
+    <div class="lounge-info-card">
+      <div class="card-header">
+        <h2>{{ selectedLounge()?.loungeName }}</h2>
+        <span class="badge" [class.operational]="selectedLounge()?.isOperational">
+          {{ selectedLounge()?.isOperational ? 'Operational' : 'Not Operational' }}
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="label">Location:</span>
+            <span class="value">{{ selectedLounge()?.address || 'N/A' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Capacity:</span>
+            <span class="value">{{ selectedLounge()?.capacity || 'N/A' }} people</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Contact:</span>
+            <span class="value">{{ selectedLounge()?.contactPhone || 'N/A' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Status:</span>
+            <span class="value">{{ selectedLounge()?.status || 'N/A' }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dashboard Cards -->
+    <div class="dashboard-cards">
+      <div class="stat-card">
+        <div class="stat-icon online">✓</div>
+        <div class="stat-content">
+          <h3>{{ onlineDevicesCount() }}</h3>
+          <p>Online Devices</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon offline">✕</div>
+        <div class="stat-content">
+          <h3>{{ offlineDevicesCount() }}</h3>
+          <p>Offline Devices</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon ads">📺</div>
+        <div class="stat-content">
+          <h3>{{ totalAdsPlayed() }}</h3>
+          <p>Ads Played (7 days)</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon sync">🔄</div>
+        <div class="stat-content">
+          <h3>{{ lastSyncTime() ? formatDate(lastSyncTime()!.toISOString()) : 'Never' }}</h3>
+          <p>Last Sync</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'overview'"
+        (click)="setActiveTab('overview')"
+      >
+        <span class="icon">📊</span>
+        Overview
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'display'"
+        (click)="setActiveTab('display')"
+      >
+        <span class="icon">🖥️</span>
+        Display Settings
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'devices'"
+        (click)="setActiveTab('devices')"
+      >
+        <span class="icon">📱</span>
+        Devices
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'emergency'"
+        (click)="setActiveTab('emergency')"
+      >
+        <span class="icon">🚨</span>
+        Emergency
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'billing'"
+        (click)="setActiveTab('billing')"
+      >
+        <span class="icon">💰</span>
+        Billing
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'lounge-ads'"
+        (click)="setActiveTab('lounge-ads')"
+      >
+        <span class="icon">🧩</span>
+        Lounge Ads
+      </button>
+    </nav>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <!-- Overview Tab -->
+      @if (activeTab() === 'overview') {
+      <div class="tab-panel">
+        <div class="panel-grid">
+          <!-- Quick Actions -->
+          <div class="panel-section">
+            <h3>Quick Actions</h3>
+            <div class="action-buttons">
+              <button class="action-btn" (click)="openEmergencyDialog()">
+                <span class="icon">🚨</span>
+                Emergency Message
+              </button>
+              <button class="action-btn" (click)="openBillingDialog()">
+                <span class="icon">📊</span>
+                Generate Report
+              </button>
+              <button class="action-btn" (click)="syncNow()">
+                <span class="icon">🔄</span>
+                Force Sync
+              </button>
+            </div>
+          </div>
+
+          <!-- Current Configuration -->
+          @if (config()) {
+          <div class="panel-section">
+            <h3>Current Configuration</h3>
+            <div class="config-summary">
+              <div class="config-item">
+                <span class="label">Display Mode:</span>
+                <span class="badge">{{ config()?.displayMode }}</span>
+              </div>
+              <div class="config-item">
+                <span class="label">Layout:</span>
+                <span class="badge">{{ config()?.layoutOption }}</span>
+              </div>
+              <div class="config-item">
+                <span class="label">Language:</span>
+                <span class="badge">{{ config()?.language }}</span>
+              </div>
+            </div>
+          </div>
+          }
+
+          <!-- Emergency Message Status -->
+          @if (emergencyMessage()) {
+          <div class="panel-section alert-section">
+            <h3>⚠️ Active Emergency Message</h3>
+            <div class="emergency-preview" [style.background-color]="emergencyMessage()?.backgroundColor" [style.color]="emergencyMessage()?.textColor">
+              <p class="emergency-text">{{ emergencyMessage()?.message }}</p>
+              <div class="emergency-meta">
+                <span class="priority-badge" [attr.data-priority]="emergencyMessage()?.priority">
+                  {{ emergencyMessage()?.priority }}
+                </span>
+                <span>Duration: {{ emergencyMessage()?.displayDuration }}s</span>
+              </div>
+            </div>
+            <button class="btn btn-danger" (click)="clearEmergencyMessage()">
+              Clear Emergency Message
+            </button>
+          </div>
+          }
+        </div>
+      </div>
+      }
+
+      <!-- Display Settings Tab -->
+      @if (activeTab() === 'display') {
+      <div class="tab-panel">
+        <div class="settings-sections">
+          <!-- Display Mode -->
+          <div class="settings-section">
+            <h3>Display Mode</h3>
+            <p class="description">Choose what content to display on the TV screens</p>
+            <div class="options-grid">
+              @for (mode of displayModes; track mode.value) {
+              <div
+                class="option-card"
+                [class.selected]="config()?.displayMode === mode.value"
+                (click)="updateDisplayMode(mode.value)"
+              >
+                <div class="option-icon">{{ mode.icon }}</div>
+                <div class="option-label">{{ mode.label }}</div>
+                <div class="option-check">
+                  @if (config()?.displayMode === mode.value) {
+                  <span>✓</span>
+                  }
+                </div>
+              </div>
+              }
+            </div>
+          </div>
+
+          <!-- Layout Options -->
+          <div class="settings-section">
+            <h3>Layout Options</h3>
+            <p class="description">Configure how content is arranged on the screen</p>
+            <div class="layout-options">
+              @for (layout of layoutOptions; track layout.value) {
+              <div
+                class="layout-card"
+                [class.selected]="config()?.layoutOption === layout.value"
+                (click)="updateLayoutOption(layout.value)"
+              >
+                <div class="layout-header">
+                  <span class="layout-icon">{{ layout.icon }}</span>
+                  <h4>{{ layout.label }}</h4>
+                </div>
+                <p class="layout-description">{{ layout.description }}</p>
+                <div class="layout-preview">
+                  @if (layout.value === 'split-screen') {
+                  <div class="preview-split">
+                    <div class="preview-left">Schedules</div>
+                    <div class="preview-right">Ads</div>
+                  </div>
+                  } @else {
+                  <div class="preview-full">Full Screen Content</div>
+                  }
+                </div>
+                @if (config()?.layoutOption === layout.value) {
+                <div class="selected-badge">✓ Active</div>
+                }
+              </div>
+              }
+            </div>
+          </div>
+
+          <!-- Multi-Language Support -->
+          <div class="settings-section">
+            <h3>Language Settings</h3>
+            <p class="description">Select the display language for your lounge</p>
+            <div class="language-grid">
+              @for (lang of languages; track lang.code) {
+              <div
+                class="language-card"
+                [class.selected]="config()?.language === lang.code"
+                (click)="updateLanguage(lang.code)"
+              >
+                <span class="flag">{{ lang.flag }}</span>
+                <span class="lang-name">{{ lang.name }}</span>
+                @if (config()?.language === lang.code) {
+                <span class="check">✓</span>
+                }
+              </div>
+              }
+            </div>
+          </div>
+        </div>
+
+        @if (isSaving()) {
+        <div class="saving-indicator">
+          <span class="spinner-small"></span>
+          Saving changes...
+        </div>
+        }
+      </div>
+      }
+
+      <!-- Devices Tab -->
+      @if (activeTab() === 'devices') {
+      <div class="tab-panel">
+        <div class="devices-header">
+          <h3>Device Management</h3>
+          <p>Monitor and control all connected TV devices</p>
+        </div>
+
+        @if (devices().length === 0) {
+        <div class="empty-state">
+          <span class="empty-icon">📱</span>
+          <h4>No Devices Found</h4>
+          <p>No devices are currently registered for this lounge.</p>
+        </div>
+        } @else {
+        <div class="devices-grid">
+          @for (device of devices(); track device.deviceId) {
+          <div class="device-card">
+            <div class="device-header">
+              <div class="device-title">
+                <span class="device-icon">📺</span>
+                <h4>{{ device.deviceId }}</h4>
+              </div>
+              <span
+                class="status-badge"
+                [style.background-color]="getStatusColor(device.status)"
+              >
+                {{ getStatusIcon(device.status) }} {{ device.status }}
+              </span>
+            </div>
+
+            <div class="device-info">
+              <div class="info-row">
+                <span class="label">Last Sync:</span>
+                <span class="value">{{ formatDate(device.lastSyncTime) }}</span>
+              </div>
+              @if (device.location) {
+              <div class="info-row">
+                <span class="label">Location:</span>
+                <span class="value">{{ device.location.address || 'N/A' }}</span>
+              </div>
+              }
+              @if (device.ipAddress) {
+              <div class="info-row">
+                <span class="label">IP Address:</span>
+                <span class="value">{{ device.ipAddress }}</span>
+              </div>
+              }
+              @if (device.firmwareVersion) {
+              <div class="info-row">
+                <span class="label">Firmware:</span>
+                <span class="value">{{ device.firmwareVersion }}</span>
+              </div>
+              }
+              @if (device.screenResolution) {
+              <div class="info-row">
+                <span class="label">Resolution:</span>
+                <span class="value">{{ device.screenResolution }}</span>
+              </div>
+              }
+              @if (device.uptime) {
+              <div class="info-row">
+                <span class="label">Uptime:</span>
+                <span class="value">{{ formatDuration(device.uptime) }}</span>
+              </div>
+              }
+            </div>
+
+            <div class="device-actions">
+              <button class="device-btn" (click)="refreshDevice(device)" title="Refresh">
+                🔄
+              </button>
+              <button
+                class="device-btn"
+                (click)="rebootDevice(device)"
+                title="Reboot"
+              >
+                ⚡
+              </button>
+            </div>
+          </div>
+          }
+        </div>
+        }
+      </div>
+      }
+
+      <!-- Emergency Tab -->
+      @if (activeTab() === 'emergency') {
+      <div class="tab-panel">
+        <div class="emergency-section">
+          <h3>Emergency Messaging</h3>
+          <p class="description">
+            Broadcast urgent messages to all displays in this lounge
+          </p>
+
+          @if (emergencyMessage()) {
+          <div class="current-emergency">
+            <h4>Current Emergency Message</h4>
+            <div
+              class="emergency-preview-large"
+              [style.background-color]="emergencyMessage()?.backgroundColor"
+              [style.color]="emergencyMessage()?.textColor"
+            >
+              <p class="message-text">{{ emergencyMessage()?.message }}</p>
+              <div class="message-details">
+                <span class="priority" [attr.data-priority]="emergencyMessage()?.priority">
+                  Priority: {{ emergencyMessage()?.priority }}
+                </span>
+                <span>Duration: {{ emergencyMessage()?.displayDuration }}s</span>
+                <span>Created: {{ formatDate(emergencyMessage()?.createdAt) }}</span>
+              </div>
+            </div>
+            <div class="emergency-actions">
+              <button class="btn btn-secondary" (click)="openEmergencyDialog()">
+                Edit Message
+              </button>
+              <button class="btn btn-danger" (click)="clearEmergencyMessage()">
+                Clear Message
+              </button>
+            </div>
+          </div>
+          } @else {
+          <div class="no-emergency">
+            <span class="icon">✓</span>
+            <h4>No Active Emergency Message</h4>
+            <p>All systems normal. Click below to create an emergency message if needed.</p>
+            <button class="btn btn-primary" (click)="openEmergencyDialog()">
+              Create Emergency Message
+            </button>
+          </div>
+          }
+        </div>
+      </div>
+      }
+
+      <!-- Billing Tab -->
+      @if (activeTab() === 'billing') {
+      <div class="tab-panel">
+        <div class="billing-section">
+          <h3>Ad Playback Billing</h3>
+          <p class="description">Track advertisement playback for billing purposes</p>
+
+          <div class="billing-controls">
+            <button class="btn btn-primary" (click)="openBillingDialog()">
+              Generate Billing Report
+            </button>
+          </div>
+
+          @if (adPlaybackHistory().length > 0) {
+          <div class="playback-table-container">
+            <h4>Recent Ad Playback (Last 7 Days)</h4>
+            <table class="playback-table">
+              <thead>
+                <tr>
+                  <th>Ad Name</th>
+                  <th>Played At</th>
+                  <th>Duration</th>
+                  <th>Status</th>
+                  <th>Device</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (playback of adPlaybackHistory().slice(0, 20); track playback.adId + playback.playedAt) {
+                <tr>
+                  <td>{{ playback.adName }}</td>
+                  <td>{{ formatDate(playback.playedAt) }}</td>
+                  <td>{{ playback.duration }}s</td>
+                  <td>
+                    <span class="status-badge" [class.completed]="playback.completed">
+                      {{ playback.completed ? '✓ Completed' : '○ Incomplete' }}
+                    </span>
+                  </td>
+                  <td>{{ playback.deviceId }}</td>
+                </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          } @else {
+          <div class="empty-state">
+            <span class="empty-icon">📊</span>
+            <h4>No Playback Data</h4>
+            <p>No advertisement playback data available for the selected period.</p>
+          </div>
+          }
+        </div>
+      </div>
+      }
+
+      <!-- Lounge-specific Ads Tab -->
+      @if (activeTab() === 'lounge-ads') {
+      <div class="tab-panel">
+        <div class="panel-grid">
+          <div class="panel-section">
+            <h3>Create Lounge-specific Advertisement</h3>
+            <div class="slot-visibility-note">
+              <div>{{ loungeSlotStatusText() }}</div>
+              <button type="button" class="btn btn-secondary" (click)="refreshLoungeAdSlots()">Refresh Slots</button>
+            </div>
+            @if (loungeAdSlots()) {
+            <div class="slot-summary-box">
+              <div>Schedule window: {{ loungeAdSlots()?.scheduleWindowSeconds }}s</div>
+              <div>Ad window: {{ loungeAdSlots()?.adWindowSeconds }}s</div>
+              <div>Booked by company ads: {{ loungeAdSlots()?.bookedSeconds }}s</div>
+              <div>Remaining for lounge/default ads: {{ loungeAdSlots()?.remainingSeconds }}s</div>
+
+              @if (interactiveAvailableSlots().length) {
+              <div class="schedule-breakdown">
+                <div class="summary-chip-label">Available ad slots (click to use):</div>
+                <div class="summary-chip-row">
+                  @for (slot of interactiveAvailableSlots(); track slot.startSecond + '-' + slot.endSecond) {
+                  <button
+                    type="button"
+                    class="summary-chip clickable"
+                    (click)="pickLoungeAdDuration(slot.durationSeconds)"
+                  >
+                    {{ slot.startSecond }}s - {{ slot.endSecond }}s ({{ slot.durationSeconds }}s)
+                  </button>
+                  }
+                </div>
+
+                <div class="summary-chip-label">All available sub-slots inside ad window (excluding 0s-6s schedule):</div>
+                <div class="summary-chip-row">
+                  @for (slot of interactiveDurationSlots(); track slot.durationSeconds) {
+                  <button
+                    type="button"
+                    class="summary-chip clickable"
+                    [class.selected]="loungeAdForm.durationSeconds === slot.durationSeconds"
+                    (click)="pickLoungeAdDuration(slot.durationSeconds)"
+                    [attr.title]="slot.startSecond + 's - ' + slot.endSecond + 's'"
+                  >
+                    {{ slot.startSecond }}s-{{ slot.endSecond }}s
+                  </button>
+                  }
+                </div>
+
+                <div class="helper-text">
+                  Selected ad window: {{ interactiveAvailableSlots()[0].startSecond }}s-{{ selectedDurationEndSecond() }}s
+                  ({{ loungeAdForm.durationSeconds }}s)
+                </div>
+              </div>
+              }
+
+              @if (loungeAdSlots()?.effectiveLoungeGroups?.length) {
+              <div class="summary-chip-row">
+                <span class="summary-chip-label">Applied lounge groups:</span>
+                @for (group of loungeAdSlots()?.effectiveLoungeGroups; track group) {
+                <span class="summary-chip">{{ group }}</span>
+                }
+              </div>
+              }
+
+              @if (scheduleTypeEntries().length) {
+              <div class="schedule-breakdown">
+                <div class="summary-chip-label">Booked by schedule type:</div>
+                @for (entry of scheduleTypeEntries(); track entry.key) {
+                <div>{{ entry.key }}: {{ entry.seconds }}s</div>
+                }
+              </div>
+              }
+            </div>
+            } @else {
+            <div class="slot-summary-box muted">
+              <div>Slot summary is not loaded yet.</div>
+            </div>
+            }
+
+            <div class="form-group">
+              <label>Name</label>
+              <input type="text" [(ngModel)]="loungeAdForm.advertisementName" class="input-field" />
+            </div>
+
+            <div class="form-group">
+              <label>Media URL</label>
+              <input type="text" [(ngModel)]="loungeAdForm.mediaUrl" class="input-field" />
+            </div>
+
+            <div class="upload-row">
+              <input type="file" accept="image/*,video/*" (change)="onLoungeAdFileSelected($event)" />
+              <button
+                class="btn btn-secondary"
+                (click)="uploadSelectedLoungeAdMedia()"
+                [disabled]="isUploadingLoungeAdMedia()"
+              >
+                {{ isUploadingLoungeAdMedia() ? 'Uploading...' : 'Upload & Use Media' }}
+              </button>
+            </div>
+            @if (selectedLoungeAdFile) {
+            <div class="helper-text">Selected file: {{ selectedLoungeAdFile.name }}</div>
+            }
+            @if (loungeAdUploadError()) {
+            <div class="error-text">{{ loungeAdUploadError() }}</div>
+            }
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Media Type</label>
+                <select [(ngModel)]="loungeAdForm.mediaType" class="input-field">
+                  <option value="image">Image</option>
+                  <option value="video">Video</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Duration (s)</label>
+                <input type="number" min="1" max="24" [(ngModel)]="loungeAdForm.durationSeconds" class="input-field" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Priority</label>
+                <select [(ngModel)]="loungeAdForm.priority" class="input-field">
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="checkbox-row">
+              <label><input type="checkbox" [(ngModel)]="loungeAdForm.isActive" /> Active</label>
+              <label><input type="checkbox" [(ngModel)]="loungeAdForm.isDefaultForAll" /> Default ad for all lounges</label>
+            </div>
+
+            <button class="btn btn-primary" (click)="createLoungeAd()">Create Lounge Ad</button>
+
+            <div class="cycle-simulator">
+              <h4>Cycle Simulator (30s)</h4>
+              <p>
+                Preview of one alternate cycle: 6 seconds schedules + 24 seconds ads.
+              </p>
+
+              <div class="simulator-track">
+                @for (segment of cyclePreviewSegments(); track segment.key) {
+                @if (segment.seconds > 0) {
+                <div
+                  class="sim-segment {{ segment.key }}"
+                  [style.width.%]="cycleSegmentWidth(segment.seconds)"
+                  [attr.title]="segment.label"
+                >
+                  <span>{{ segment.label }}</span>
+                </div>
+                }
+                }
+              </div>
+
+              <div class="simulator-legend">
+                @for (segment of cyclePreviewSegments(); track segment.key) {
+                <div>{{ segment.label }}</div>
+                }
+              </div>
+
+              @if (loungeAdOverflowSeconds() > 0) {
+              <div class="error-text">
+                Requested lounge ad exceeds available ad window by {{ loungeAdOverflowSeconds() }}s.
+              </div>
+              }
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <h3>Current Lounge/Default Ads</h3>
+            @if (!loungeAds().length) {
+            <div class="empty-state">
+              <p>No lounge-specific or default fallback ads configured yet.</p>
+            </div>
+            } @else {
+            <div class="items-list">
+              @for (ad of loungeAds(); track ad.id) {
+              <div class="item-card">
+                <div class="item-head">
+                  <h4>{{ ad.advertisementName }}</h4>
+                  <span class="badge">{{ ad.durationSeconds }}s</span>
+                </div>
+                <p>{{ ad.mediaUrl }}</p>
+                <div class="item-meta">
+                  <span>{{ ad.mediaType }}</span>
+                  <span>{{ ad.priority }}</span>
+                  <span>{{ ad.isDefaultForAll ? 'Default' : 'Lounge-specific' }}</span>
+                  <span>{{ ad.isActive ? 'Active' : 'Inactive' }}</span>
+                </div>
+                <button class="btn btn-danger" (click)="deleteLoungeAd(ad)">Delete</button>
+              </div>
+              }
+            </div>
+            }
+          </div>
+        </div>
+      </div>
+      }
+    </div>
+    }
+  </div>
+
+  <!-- Emergency Message Dialog -->
+  @if (showEmergencyDialog()) {
+  <div class="modal-overlay" (click)="closeEmergencyDialog()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Emergency Message</h3>
+        <button class="close-btn" (click)="closeEmergencyDialog()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>
+            <input type="checkbox" [(ngModel)]="emergencyMessageForm.enabled" />
+            Enable Emergency Message
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label>Message</label>
+          <textarea
+            [(ngModel)]="emergencyMessageForm.message"
+            rows="4"
+            placeholder="Enter emergency message..."
+            class="form-control"
+          ></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Priority</label>
+            <select [(ngModel)]="emergencyMessageForm.priority" class="form-control">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Display Duration (seconds)</label>
+            <input
+              type="number"
+              [(ngModel)]="emergencyMessageForm.displayDuration"
+              min="5"
+              max="300"
+              class="form-control"
+            />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Background Color</label>
+            <input
+              type="color"
+              [(ngModel)]="emergencyMessageForm.backgroundColor"
+              class="form-control color-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Text Color</label>
+            <input
+              type="color"
+              [(ngModel)]="emergencyMessageForm.textColor"
+              class="form-control color-input"
+            />
+          </div>
+        </div>
+
+        <div class="message-preview">
+          <h4>Preview</h4>
+          <div
+            class="preview-box"
+            [style.background-color]="emergencyMessageForm.backgroundColor"
+            [style.color]="emergencyMessageForm.textColor"
+          >
+            {{ emergencyMessageForm.message || 'Your message will appear here...' }}
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeEmergencyDialog()">Cancel</button>
+        <button
+          class="btn btn-primary"
+          (click)="saveEmergencyMessage()"
+          [disabled]="!emergencyMessageForm.message"
+        >
+          Activate Message
+        </button>
+      </div>
+    </div>
+  </div>
+  }
+
+  <!-- Billing Report Dialog -->
+  @if (showBillingDialog()) {
+  <div class="modal-overlay" (click)="closeBillingDialog()">
+    <div class="modal large" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Generate Billing Report</h3>
+        <button class="close-btn" (click)="closeBillingDialog()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Start Date</label>
+            <input type="date" [(ngModel)]="billingReportForm.startDate" class="form-control" />
+          </div>
+
+          <div class="form-group">
+            <label>End Date</label>
+            <input type="date" [(ngModel)]="billingReportForm.endDate" class="form-control" />
+          </div>
+        </div>
+
+        <div class="report-actions">
+          <button class="btn btn-primary" (click)="generateBillingReport()">
+            Generate Report
+          </button>
+        </div>
+
+        @if (billingReport()) {
+        <div class="billing-report">
+          <h4>Billing Report Summary</h4>
+          <div class="report-summary">
+            <div class="summary-item">
+              <span class="label">Total Ads Played:</span>
+              <span class="value">{{ billingReport()?.totalAdsPlayed }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="label">Total Duration:</span>
+              <span class="value">{{ formatDuration(billingReport()?.totalDuration || 0) }}</span>
+            </div>
+            @if (billingReport()?.totalCost) {
+            <div class="summary-item">
+              <span class="label">Total Cost:</span>
+              <span class="value">${{ (billingReport()?.totalCost ?? 0).toFixed(2) }}</span>
+            </div>
+            }
+          </div>
+
+          <div class="download-options">
+            <h5>Download Report</h5>
+            <div class="download-buttons">
+              <button class="btn btn-secondary" (click)="downloadBillingReport('pdf')">
+                Download PDF
+              </button>
+              <button class="btn btn-secondary" (click)="downloadBillingReport('csv')">
+                Download CSV
+              </button>
+              <button class="btn btn-secondary" (click)="downloadBillingReport('excel')">
+                Download Excel
+              </button>
+            </div>
+          </div>
+        </div>
+        }
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeBillingDialog()">Close</button>
+      </div>
+    </div>
+  </div>
+  }
+</div>

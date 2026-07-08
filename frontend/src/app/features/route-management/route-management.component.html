@@ -1,0 +1,216 @@
+<app-header />
+
+<div class="route-management-page">
+  <div class="route-management-container">
+    <div class="header-section">
+    <h1>Route Management</h1>
+    <div class="header-actions">
+      <a routerLink="/route-management/editor" class="btn-primary">
+        <span class="icon">➕</span>
+        Create New Route
+      </a>
+    </div>
+  </div>
+
+  <div class="search-section">
+    <input 
+      type="text" 
+      [(ngModel)]="searchTerm" 
+      (input)="filterRoutes()"
+      placeholder="Search routes by name, number, or city..."
+      class="search-input"
+    />
+  </div>
+
+  <div *ngIf="isLoading" class="loading">
+    <div class="spinner"></div>
+    <p>Loading routes...</p>
+  </div>
+
+  <div *ngIf="error" class="error-message">
+    {{ error }}
+  </div>
+
+  <div *ngIf="!isLoading && filteredRoutes.length === 0" class="empty-state">
+    <p>No routes found</p>
+  </div>
+
+  <div *ngIf="!isLoading && filteredRoutes.length > 0" class="routes-grid">
+    <div *ngFor="let route of filteredRoutes" class="route-card">
+      <div class="route-header">
+        <div class="route-number">Route {{ route.route_number }}</div>
+        <div class="route-status" [class.active]="route.is_active">
+          {{ route.is_active ? 'Active' : 'Inactive' }}
+        </div>
+      </div>
+
+      <h3 class="route-name">{{ route.route_name }}</h3>
+
+      <div class="route-details">
+        <div class="detail-item">
+          <span class="label">From:</span>
+          <span class="value">{{ route.origin_city }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">To:</span>
+          <span class="value">{{ route.destination_city }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Distance:</span>
+          <span class="value">{{ route.total_distance_km }} km</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Duration:</span>
+          <span class="value">{{ route.estimated_duration_minutes }} min</span>
+        </div>
+        <div class="detail-item trip-info">
+          <span class="label">Active Trips:</span>
+          <span class="value trip-count">
+            <span class="badge" [class.has-trips]="route.tripCount && route.tripCount > 0">
+              {{ route.tripCount || 0 }}
+            </span>
+            <span *ngIf="getActiveTripCount(route) > 0" class="animating-badge">
+              {{ getActiveTripCount(route) }} 🚌
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <div class="route-actions">
+        <button 
+          *ngIf="route.tripCount && route.tripCount > 0"
+          (click)="showTripsForRoute(route)"
+          class="btn-trips"
+        >
+          📍 View Trips ({{ route.tripCount }})
+        </button>
+        <button 
+          *ngIf="canShowSegments(route)"
+          (click)="toggleSegments(route.id)"
+          class="btn-segments"
+          [class.expanded]="isSegmentsExpanded(route.id)"
+        >
+          📍 Segments {{ isSegmentsExpanded(route.id) ? '▼' : '▶' }} ({{ route.segments?.length || 0 }})
+        </button>
+        <button 
+          [routerLink]="['/route-management/editor', route.id]"
+          class="btn-edit"
+        >
+          ✏️ Edit
+        </button>
+        <button 
+          (click)="toggleRouteStatus(route)"
+          class="btn-toggle"
+          [class.deactivate]="route.is_active"
+        >
+          {{ route.is_active ? '⏸️ Deactivate' : '▶️ Activate' }}
+        </button>
+        <button 
+          (click)="deleteRoute(route.id!)"
+          class="btn-delete"
+        >
+          🗑️ Delete
+        </button>
+      </div>
+
+      <!-- Route Segments Display -->
+      <div *ngIf="isSegmentsExpanded(route.id)" class="segments-panel">
+        <div class="segments-header">
+          <h4 *ngIf="route.segments && route.segments.length > 0">Route Segments ({{ route.segments.length }}) • Total: {{ getRouteTotalDistance(route.segments).toFixed(2) }} km</h4>
+          <h4 *ngIf="!route.segments || route.segments.length === 0">Route Segments (0)</h4>
+        </div>
+
+        <div *ngIf="(!route.segments || route.segments.length === 0)" class="segments-empty">
+          <p>{{ route.segmentError || 'No segments available for this route.' }}</p>
+          <p *ngIf="route.decodedPointCount !== undefined">Decoded points: {{ route.decodedPointCount }}</p>
+        </div>
+        
+        <div *ngIf="route.segments && route.segments.length > 0" class="segments-list">
+          <div *ngFor="let segment of route.segments" class="segment-item">
+            <div class="segment-number">
+              Segment {{ segment.index }}
+            </div>
+            
+            <div class="segment-details-grid">
+              <div class="segment-detail">
+                <span class="label">From:</span>
+                <span class="value">{{ segment.from.lat.toFixed(6) }}, {{ segment.from.lng.toFixed(6) }}</span>
+              </div>
+              <div class="segment-detail">
+                <span class="label">To:</span>
+                <span class="value">{{ segment.to.lat.toFixed(6) }}, {{ segment.to.lng.toFixed(6) }}</span>
+              </div>
+              <div class="segment-detail">
+                <span class="label">Distance:</span>
+                <span class="value">{{ segment.distanceFormatted }} km</span>
+              </div>
+              <div class="segment-detail">
+                <span class="label">Bearing:</span>
+                <span class="value">{{ segment.bearing.toFixed(1) }}° ({{ segment.bearingDirection }})</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trips Panel -->
+  <div *ngIf="showTripsPanel && selectedRoute" class="trips-panel-overlay" (click)="closeTripsPanel()">
+    <div class="trips-panel" (click)="$event.stopPropagation()">
+      <div class="panel-header">
+        <h2>Active Trips - {{ selectedRoute.route_name }}</h2>
+        <button class="btn-close" (click)="closeTripsPanel()">✕</button>
+      </div>
+
+      <div class="panel-content">
+        <div *ngIf="!selectedRoute.activeTrips || selectedRoute.activeTrips.length === 0" class="empty-trips">
+          <p>No active trips for this route</p>
+        </div>
+
+        <div *ngIf="selectedRoute.activeTrips && selectedRoute.activeTrips.length > 0" class="trips-list">
+          <div *ngFor="let trip of selectedRoute.activeTrips" class="trip-item" [class]="getTripStatusClass(trip)">
+            <div class="trip-header">
+              <span class="trip-id">Trip ID: {{ trip.trip_id.substring(0, 8) }}...</span>
+              <span class="trip-status-badge" [class.animating]="trip.is_animating">
+                {{ trip.is_animating ? '🚌 Running' : '⏸️ Paused' }}
+              </span>
+            </div>
+
+            <div class="trip-details-grid">
+              <div class="trip-detail">
+                <span class="label">Progress:</span>
+                <span class="value">{{ formatProgress(trip.progress_percentage) }}%</span>
+              </div>
+              <div class="trip-detail">
+                <span class="label">Point:</span>
+                <span class="value">{{ trip.current_point_index }} / {{ trip.total_points }}</span>
+              </div>
+              <div class="trip-detail">
+                <span class="label">Speed:</span>
+                <span class="value">{{ trip.speed_multiplier }}x</span>
+              </div>
+              <div class="trip-detail">
+                <span class="label">Location:</span>
+                <span class="value">{{ trip.current_latitude.toFixed(5) }}, {{ trip.current_longitude.toFixed(5) }}</span>
+              </div>
+              <div class="trip-detail">
+                <span class="label">Created:</span>
+                <span class="value">{{ trip.created_at | date: 'short' }}</span>
+              </div>
+              <div class="trip-detail">
+                <span class="label">Updated:</span>
+                <span class="value">{{ trip.updated_at | date: 'short' }}</span>
+              </div>
+            </div>
+
+            <div class="trip-progress-bar">
+              <div class="progress-fill" [style.width.%]="trip.progress_percentage"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>

@@ -1,0 +1,57 @@
+<div class="app-header">
+  <div class="top-bar">
+    <div class="logo-section">
+      <div class="logo">🚌</div>
+      <h1 class="app-name">Smart Transit System</h1>
+    </div>
+    <div class="time-display">
+      <div class="live-time">{{ currentTime }}</div>
+      <div class="live-date">{{ currentDate }}</div>
+    </div>
+    <a routerLink="/logout" class="logout-button" aria-label="Log out">
+      Logout
+    </a>
+  </div>
+
+  <nav class="nav-bar">
+    <div class="nav-tabs">
+      <a routerLink="/dashboard" routerLinkActive="active" class="nav-tab">
+        <span class="icon">▦</span>
+        <span class="label">Dashboard</span>
+      </a>
+      <a routerLink="/departures" routerLinkActive="active" class="nav-tab">
+        <span class="icon">↗</span>
+        <span class="label">Departure Management</span>
+      </a>
+      <a routerLink="/arrivals" routerLinkActive="active" class="nav-tab">
+        <span class="icon">↙</span>
+        <span class="label">Arrival Management</span>
+      </a>
+      
+      <a routerLink="/route-management" routerLinkActive="active" class="nav-tab">
+        <span class="icon">🗺️</span>
+        <span class="label">Route Management</span>
+      </a>
+      
+      <a routerLink="/advertisements" routerLinkActive="active" class="nav-tab">
+        <span class="icon">▣</span>
+        <span class="label">Advertisement Management</span>
+      </a>
+
+      <a routerLink="/ad-cost-report" routerLinkActive="active" class="nav-tab">
+        <span class="icon">💲</span>
+        <span class="label">Ad Cost Report</span>
+      </a>
+
+      <a routerLink="/lounge" routerLinkActive="active" class="nav-tab">
+        <span class="icon">📍</span>
+        <span class="label">Lounge Validation</span>
+      </a>
+      
+      <a routerLink="/bus-schedule" routerLinkActive="active" class="nav-tab">
+        <span class="icon">◫</span>
+        <span class="label">Bus schedules & Advertising</span>
+      </a>
+    </div>
+  </nav>
+</div>

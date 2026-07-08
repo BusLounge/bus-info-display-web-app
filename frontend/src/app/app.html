@@ -1,0 +1,13 @@
+<div class="global-loader" *ngIf="(isLoading$ | async) && !hideGlobalLoaderForCurrentRoute" aria-live="polite" aria-label="Loading">
+	<div class="global-loader__backdrop"></div>
+	<div class="global-loader__content">
+		<dotlottie-wc
+			class="global-loader__animation"
+			src="https://lottie.host/63952d97-f8a7-445d-b791-e6c061eb0265/jQeNdN6JdR.lottie"
+			autoplay
+			loop
+		></dotlottie-wc>
+	</div>
+</div>
+
+<router-outlet></router-outlet>

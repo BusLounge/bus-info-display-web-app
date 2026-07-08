@@ -1,0 +1,302 @@
+// Arrival Management Page Styles - Light Mode (Same as Departure Management)
+
+.dashboard-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+}
+
+.dashboard-content {
+  padding: 20px;
+}
+
+.page-title {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0 32px 24px 32px;
+  color: #1e293b;
+  letter-spacing: -0.5px;
+  position: relative;
+  padding-bottom: 12px;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 80px;
+    height: 4px;
+    background: linear-gradient(90deg, #2563eb, #7c3aed);
+    border-radius: 2px;
+  }
+}
+
+.search-container {
+  margin: 0 32px 28px 32px;
+}
+
+.search-input {
+  width: 100%;
+  max-width: 600px;
+  padding: 14px 20px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+
+  &:focus {
+    border-color: #2563eb;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.15);
+    transform: translateY(-1px);
+  }
+
+  &::placeholder {
+    color: #94a3b8;
+  }
+}
+
+.lounges-container {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 0 32px 32px 32px;
+}
+
+.page-subtitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+
+.lounge-section {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(37, 99, 235, 0.08);
+  transition: all 0.3s ease;
+
+  &:hover {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+  }
+}
+
+.lounge-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  margin-bottom: 16px;
+  color: #1e293b;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding-bottom: 12px;
+  border-bottom: 3px solid #2563eb;
+  display: inline-block;
+}
+
+.table-wrapper {
+  overflow-x: hidden;
+  border-radius: 12px;
+  margin-top: 16px;
+}
+
+.arrivals-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+
+  thead {
+    background: linear-gradient(135deg, #E5E7EB 0%, #E5E7EB 100%);
+    color: rgb(11, 11, 11);
+
+    th {
+      padding: 16px 20px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+
+      &:first-child {
+        border-radius: 12px 0 0 0;
+      }
+
+      &:last-child {
+        border-radius: 0 12px 0 0;
+      }
+    }
+  }
+
+  tbody {
+    tr {
+      transition: all 0.2s ease;
+      background: #ffffff;
+
+      &:hover {
+        background: #f8fafc;
+        transform: scale(1.01);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+      }
+
+      &.active-row {
+        background: linear-gradient(90deg, #dbeafe 0%, #e0f2fe 100%);
+        border-left: 4px solid #2563eb;
+
+        &:hover {
+          background: linear-gradient(90deg, #bfdbfe 0%, #dbeafe 100%);
+        }
+
+        .indicator {
+          display: inline-block;
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: #1be62c;
+          margin-right: 10px;
+          animation: pulse 2s ease-in-out infinite;
+          box-shadow: 0 0 8px rgba(70, 243, 58, 0.5);
+        }
+      }
+
+      td {
+        padding: 16px 20px;
+        color: #334155;
+        font-size: 1.1rem;
+        border-bottom: 1px solid #e2e8f0;
+        font-weight: 500;
+
+        &:first-child {
+          font-weight: 700;
+          color: #1e293b;
+        }
+      }
+
+      &:last-child td {
+        border-bottom: none;
+      }
+    }
+  }
+}
+
+.status {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+
+  &.arrived {
+    color: #0bc73d;
+  }
+
+  &.expected {
+    color: #f3b219;
+  }
+
+  &.delayed {
+    color: #ef4444;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
+}
+
+@media (max-width: 1024px) {
+  .page-title,
+  .search-container,
+  .lounges-container {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-title,
+  .search-container,
+  .lounges-container {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+
+  .page-title {
+    font-size: 1.5rem;
+  }
+
+  .arrivals-table {
+    font-size: 0.85rem;
+
+    th, td {
+      padding: 12px 14px;
+    }
+  }
+
+  .lounge-section {
+    padding: 16px;
+  }
+}
+
+// Loading and Error States
+.loading-container,
+.error-container {
+  margin: 32px;
+  padding: 48px 32px;
+  background: #ffffff;
+  border-radius: 16px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+
+  p {
+    font-size: 1.1rem;
+    color: #64748b;
+    margin: 0;
+  }
+}
+
+.loading-container {
+  p {
+    color: #2563eb;
+    font-weight: 600;
+  }
+}
+
+.error-container {
+  p {
+    color: #dc2626;
+    margin-bottom: 16px;
+  }
+
+  .retry-button {
+    padding: 12px 24px;
+    background: #2563eb;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+
+    &:hover {
+      background: #1d4ed8;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+}

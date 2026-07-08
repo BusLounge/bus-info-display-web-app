@@ -1,0 +1,38 @@
+<div class="login-page">
+  <main class="login-page__content">
+		<section class="login-card" aria-label="Login">
+			<button class="back" type="button" (click)="navigateHome()" aria-label="Back">
+				<span aria-hidden="true">←</span>
+			</button>
+
+			<h1 class="login-title">Login</h1>
+
+			<form class="login-form" (ngSubmit)="submit()">
+				<label class="field">
+					<span class="field__label">User name</span>
+					<input class="field__input" [(ngModel)]="username" name="username" autocomplete="username" required />
+				</label>
+
+				<label class="field">
+					<span class="field__label">Password</span>
+					<input
+						class="field__input"
+						type="password"
+						[(ngModel)]="password"
+						name="password"
+						autocomplete="current-password"
+						required
+					/>
+				</label>
+
+				<a class="forgot" href="#" (click)="forgotPassword($event)">Forgot password?</a>
+
+				<p class="login-error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+				<button class="login-btn" type="submit" [disabled]="isSubmitting">
+					{{ isSubmitting ? 'Signing in...' : 'Login' }}
+				</button>
+			</form>
+		</section>
+  </main>
+</div>

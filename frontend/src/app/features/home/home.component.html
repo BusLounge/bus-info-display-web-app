@@ -1,0 +1,14 @@
+<div class="home">
+	<div class="home__bg" [class.is-visible]="showBgA" [style.backgroundImage]="backgroundCssA" aria-hidden="true"></div>
+	<div class="home__bg" [class.is-visible]="!showBgA" [style.backgroundImage]="backgroundCssB" aria-hidden="true"></div>
+
+	<div class="home__overlay" aria-hidden="true"></div>
+
+	<div class="home__content">
+		<h1 class="home__title">Bus Information Display<br />System</h1>
+
+		<button class="home__login" type="button" (click)="navigateToLogin()">
+			Login
+		</button>
+	</div>
+</div>

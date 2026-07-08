@@ -1,0 +1,19 @@
+{
+  "serverUrl": "http://localhost:8083",
+  "loungeId": "91570523-5260-4fcd-a365-8fbe0dbf2662",
+  "loungeGroup": "alohaRavePluse",
+  "tvPurpose": "schedules-only",
+  "scheduleIntervalCron": "*/5 * * * *",
+  "adsIntervalCron": "*/15 * * * *",
+  "broadcastIntervalCron": "*/1 * * * *",
+  "localBridgePort": 3001,
+  "requestTimeoutMs": 10000,
+  "downloadTimeoutMs": 120000,
+  "storeDir": "./local-store",
+  "language": "ta",
+  "displayMode": "both",
+  "layoutMode": "full-screen-alternate",
+  "syncFrequencySeconds": 5,
+  "displayResolution": "1920x1080",
+  "displayOrientation": "landscape"
+}

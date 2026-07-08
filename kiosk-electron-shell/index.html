@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kiosk</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            color: #fff;
+            font-family: sans-serif;
+        }
+        #container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+        #status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>Waiting for configuration...</h1>
+        <p>Press Ctrl+Shift+A to open admin panel</p>
+    </div>
+
+    <div id="status-bar">
+        <div id="connection-status">Connection: N/A</div>
+        <div id="last-sync">Last Sync: N/A</div>
+    </div>
+
+    <script>
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+                window.electron.openAdmin();
+            }
+        });
+
+        window.electron.onDeviceUpdate(({ status, config }) => {
+            if (status) {
+                const connectionStatus = document.getElementById('connection-status');
+                connectionStatus.textContent = `Connection: ${status.connectionQuality}`;
+                
+                const lastSync = document.getElementById('last-sync');
+                const syncTime = new Date(status.lastSyncTime);
+                lastSync.textContent = `Last Sync: ${syncTime.toLocaleString()}`;
+            }
+
+            if (config) {
+                const container = document.getElementById('container');
+                container.innerHTML = `
+                    <h1>Display Mode: ${config.displayMode}</h1>
+                    <h2>Layout Mode: ${config.layoutMode}</h2>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+// Bus Schedule & Advertising Page Styles - Light Mode
+
+.dashboard-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+}
+
+.dashboard-content {
+  padding: 20px;
+}
+
+.page-title {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0 32px 24px 32px;
+  color: #1e293b;
+  letter-spacing: -0.5px;
+  position: relative;
+  padding-bottom: 12px;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 80px;
+    height: 4px;
+    background: linear-gradient(90deg, #2563eb, #7c3aed);
+    border-radius: 2px;
+  }
+}
+
+.search-container {
+  margin: 0 32px 28px 32px;
+  max-width: 600px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 14px 20px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+
+  &:focus {
+    border-color: #2563eb;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.15);
+    transform: translateY(-1px);
+  }
+
+  &::placeholder {
+    color: #94a3b8;
+  }
+}
+
+.lounge-container {
+  padding: 0 32px 32px 32px;
+}
+
+.lounge-section {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.table-wrapper {
+  overflow-x: hidden;
+}
+
+.loading-message,
+.error-message {
+  padding: 32px;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 12px;
+}
+
+.loading-message {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 2px solid #bfdbfe;
+}
+
+.error-message {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 2px solid #fecaca;
+}
+
+.lounge-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+
+  thead {
+        background: linear-gradient(135deg, #E5E7EB 0%, #E5E7EB 100%);
+
+    
+    th {
+      padding: 16px 20px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: #1e293b;
+      letter-spacing: 0.5px;
+      border-bottom: 3px solid #94a3b8;
+      white-space: nowrap;
+    }
+  }
+
+  tbody {
+    tr {
+      transition: all 0.2s ease;
+      border-bottom: 1px solid #e2e8f0;
+
+      &:hover {
+        background: #f8fafc;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      }
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      td {
+        padding: 18px 20px;
+        color: #1e293b;
+        font-size: 1.1rem;
+        font-weight: 500;
+      }
+    }
+  }
+}
+
+.btn-schedule,
+.btn-ads {
+  padding: 8px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn-schedule {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+
+  &:hover {
+    background: #1d4ed8;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    transform: translateY(-2px);
+  }
+}
+
+.btn-ads {
+  background: #22c55e;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+
+  &:hover {
+    background: #16a34a;
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+    transform: translateY(-2px);
+  }
+}
+
+@media (max-width: 768px) {
+  .page-title {
+    font-size: 1.5rem;
+    margin: 0 16px 16px 16px;
+  }
+
+  .search-container {
+    margin: 0 16px 20px 16px;
+  }
+
+  .lounge-container {
+    padding: 0 16px 16px 16px;
+  }
+
+  .lounge-section {
+    padding: 16px;
+  }
+
+  .table-wrapper {
+    overflow-x: auto;
+  }
+
+  .lounge-table {
+    thead th {
+      padding: 12px 10px;
+      font-size: 0.75rem;
+    }
+
+    tbody td {
+      padding: 12px 10px;
+      font-size: 0.85rem;
+    }
+  }
+
+  .btn-schedule,
+  .btn-ads {
+    padding: 6px 16px;
+    font-size: 0.75rem;
+  }
+}

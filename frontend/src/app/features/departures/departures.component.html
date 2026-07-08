@@ -1,0 +1,53 @@
+<div class="dashboard-page">
+  <app-header></app-header>
+
+  <div class="dashboard-content">
+    
+
+  <div class="page-title">Departure Management</div>
+
+  <div class="search-container">
+    <input type="text" class="search-input" placeholder="Search Departures for lounge..............." [(ngModel)]="searchTerm">
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="isLoading" class="loading-container">
+    <p>Loading lounges...</p>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="error && !isLoading" class="error-container">
+    <p>{{ error }}</p>
+    <button (click)="loadDepartures()" class="retry-button">Retry</button>
+  </div>
+
+  <!-- Lounges List -->
+  <div class="lounges-container" *ngIf="!isLoading && !error">
+    <section class="lounge-section" *ngFor="let lounge of filteredLounges">
+      <h2 class="lounge-title">{{ lounge.name }}</h2>
+      <div class="table-wrapper">
+        <table class="departures-table">
+          <thead>
+            <tr>
+              <th>Estimated Time Of Departure</th>
+              <th>BUS NO</th>
+              <th>ROUTE NUMBER</th>
+              <th>DESTINATION</th>
+              <th>REMARKS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let departure of lounge.departures" [class.active-row]="departure.active">
+              <td><strong>{{ departure.time }}</strong></td>
+              <td><strong>{{ departure.busNo }}</strong></td>
+              <td><strong>{{ departure.routeNumber }}</strong></td>
+              <td><strong>{{ departure.destination }}</strong></td>
+              <td>{{ departure.statusText }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+  </div>
+</div>

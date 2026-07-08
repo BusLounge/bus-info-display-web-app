@@ -1,0 +1,144 @@
+.home {
+	min-height: 100vh;
+	width: 100vw;
+	display: grid;
+	place-items: center;
+	position: relative;
+	overflow: hidden;
+}
+
+.home__bg {
+	position: absolute;
+	inset: 0;
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: cover;
+	opacity: 0;
+	transform: scale(1.05);
+	filter: saturate(1.05) contrast(1.05);
+	transition: opacity 900ms ease-in-out;
+	will-change: opacity, transform;
+	animation: bg-zoom 18s ease-in-out infinite;
+}
+
+.home__bg.is-visible {
+	opacity: 1;
+}
+
+.home__overlay {
+	position: absolute;
+	inset: 0;
+	background: radial-gradient(70% 80% at 50% 35%, rgba(10, 75, 255, 0.15), rgba(0, 0, 0, 0.55));
+	z-index: 1;
+}
+
+.home__content {
+	position: relative;
+	z-index: 2;
+	text-align: center;
+	padding: 24px;
+	animation: content-in 700ms ease-out both;
+}
+
+.home__title {
+	margin: 0 0 18px;
+	color: #ffffff;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	line-height: 1.1;
+	text-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
+	font-size: clamp(2rem, 4.4vw, 3.6rem);
+	animation: title-in 800ms ease-out both;
+}
+
+.home__login {
+	appearance: none;
+	border: 0;
+	cursor: pointer;
+	padding: 10px 26px;
+	border-radius: 999px;
+	background: #0b5cff;
+	color: #ffffff;
+	font-weight: 700;
+	font-size: 1rem;
+	box-shadow: 0 10px 30px rgba(11, 92, 255, 0.35);
+	transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+	animation: button-in 900ms ease-out both, button-pulse 3.2s ease-in-out 1.2s infinite;
+}
+
+.home__login:hover {
+	transform: translateY(-1px);
+	filter: brightness(1.05);
+	box-shadow: 0 14px 42px rgba(11, 92, 255, 0.48);
+}
+
+.home__login:active {
+	transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.home__bg,
+	.home__content,
+	.home__title,
+	.home__login {
+		animation: none !important;
+		transition: none !important;
+	}
+}
+
+@keyframes bg-zoom {
+	0% {
+		transform: scale(1.05);
+	}
+	50% {
+		transform: scale(1.12);
+	}
+	100% {
+		transform: scale(1.05);
+	}
+}
+
+@keyframes content-in {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes title-in {
+	from {
+		opacity: 0;
+		transform: translateY(12px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes button-in {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes button-pulse {
+	0% {
+		box-shadow: 0 10px 30px rgba(11, 92, 255, 0.35);
+	}
+	50% {
+		box-shadow: 0 18px 46px rgba(11, 92, 255, 0.52);
+	}
+	100% {
+		box-shadow: 0 10px 30px rgba(11, 92, 255, 0.35);
+	}
+}

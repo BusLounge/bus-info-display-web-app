@@ -1,0 +1,58 @@
+<div class="dashboard-page">
+  <app-header></app-header>
+
+  <div class="dashboard-content">
+    <div class="page-title">Bus Schedule & Advertising</div>
+
+    <div class="search-container">
+      <input type="text" class="search-input" placeholder="Search Advertisments.................." [(ngModel)]="searchTerm">
+    </div>
+
+    <div class="lounge-container">
+      <section class="lounge-section">
+        <div *ngIf="loading" class="loading-message">
+          Loading lounges...
+        </div>
+        
+        <div *ngIf="error" class="error-message">
+          {{ error }}
+        </div>
+        
+        <div class="table-wrapper" *ngIf="!loading && !error">
+          <table class="lounge-table">
+            <thead>
+              <tr>
+                <th>LOUNGE NAME</th>
+                <th>DISTRICT</th>
+                <th>UPCOMING ARRIVALS</th>
+                <th>UPCOMING DEPARTURES</th>
+                <th>BUS SCHEDULES</th>
+                <th>ADVERTISMENTS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let lounge of filteredLounges">
+                <td>{{ lounge.name }}</td>
+                <td>{{ lounge.district }}</td>
+                <td>
+                  <div class="time-chip" *ngFor="let time of lounge.arrivals.slice(0, 3)">{{ time }}</div>
+                  <span *ngIf="lounge.arrivals.length === 0">N/A</span>
+                </td>
+                <td>
+                  <div class="time-chip" *ngFor="let time of lounge.departures.slice(0, 3)">{{ time }}</div>
+                  <span *ngIf="lounge.departures.length === 0">N/A</span>
+                </td>
+                <td>
+                  <button class="btn-schedule" (click)="viewSchedules(lounge)">VIEW SCHEDULES</button>
+                </td>
+                <td>
+                  <button class="btn-ads" (click)="viewAds(lounge)">VIEW ADS</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,230 @@
+<div class="cost-report-page">
+  <app-header></app-header>
+
+  <div class="cost-report-content">
+    <div class="page-head">
+      <div>
+        <div class="page-title">Advertisement Cost Report</div>
+        <p class="page-subtitle">Manage traffic rates, log playbacks, and analyze ad spend by scheduled/played time.</p>
+      </div>
+      <button class="btn secondary" (click)="refreshAll()">Refresh Data</button>
+    </div>
+
+    @if (errorMessage) {
+    <div class="message error">{{ errorMessage }}</div>
+    }
+    @if (successMessage) {
+    <div class="message success">{{ successMessage }}</div>
+    }
+
+    <section class="card">
+      <h2>Cost Per Second by Traffic Level</h2>
+      @if (isLoadingRates) {
+      <p class="loading-text">Loading rates...</p>
+      } @else {
+      <div class="table-wrap">
+      <table class="table rates-table">
+        <thead>
+          <tr>
+            <th>Traffic Level</th>
+            <th>Cost Per Second</th>
+            <th>Updated</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (rate of rates; track rate.trafficLevel) {
+          <tr [class]="'row-' + rate.trafficLevel.toLowerCase()">
+            <td>
+              <span class="traffic-pill" [class]="'pill-' + rate.trafficLevel.toLowerCase()">{{ rate.trafficLevel }}</span>
+            </td>
+            <td>
+              <input type="number" min="0" step="0.01" [(ngModel)]="rateDrafts[rate.trafficLevel]" class="input" />
+            </td>
+            <td>{{ rate.updatedAt | date:'medium' }}</td>
+            <td>
+              <button class="btn" (click)="saveRate(rate.trafficLevel)">Save</button>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+      </div>
+      }
+    </section>
+
+    <section class="card">
+      <h2>Log Playback (for cost calculation)</h2>
+      <div class="form-grid">
+        <div class="field">
+          <label>Advertisement ID</label>
+          <input class="input" type="text" [(ngModel)]="logForm.advertisementId" />
+        </div>
+        <div class="field">
+          <label>Advertisement Name</label>
+          <input class="input" type="text" [(ngModel)]="logForm.advertisementName" />
+        </div>
+        <div class="field">
+          <label>Duration Seconds</label>
+          <input class="input" type="number" min="1" [(ngModel)]="logForm.durationSeconds" />
+        </div>
+        <div class="field field-wide">
+          <label>Played At (optional RFC3339, used for auto traffic level)</label>
+          <input class="input" type="text" [(ngModel)]="logForm.playedAt" placeholder="2026-03-29T13:00:06Z" />
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" [disabled]="isRecordingLog" (click)="recordPlaybackLog()">
+          {{ isRecordingLog ? 'Saving Log...' : 'Add Playback Log' }}
+        </button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Aggregated Cost by Advertisement</h2>
+
+      <div class="filters">
+        <div class="field date-field">
+          <label>Start Date</label>
+          <input class="input" type="date" [(ngModel)]="startDate" />
+        </div>
+        <div class="field date-field">
+          <label>End Date</label>
+          <input class="input" type="date" [(ngModel)]="endDate" />
+        </div>
+        <div class="filter-actions filter-actions-primary">
+          <button class="btn" (click)="loadReport()">Apply Filter</button>
+        </div>
+        <div class="filter-actions filter-actions-secondary">
+          <button class="btn ghost" (click)="applyQuickRange(7)">Last 7 Days</button>
+          <button class="btn ghost" (click)="applyQuickRange(30)">Last 30 Days</button>
+          <button class="btn ghost" (click)="clearDateFilters()">Clear</button>
+          <button class="btn secondary" (click)="exportCsv()">Export CSV</button>
+        </div>
+      </div>
+
+      <div class="table-tools">
+        <input class="input search" type="text" [(ngModel)]="reportSearchTerm" placeholder="Search by ad name or ID" />
+        <select class="input traffic-filter" [(ngModel)]="reportTrafficFilter">
+          <option value="All">All Traffic</option>
+          <option value="Peak">Peak</option>
+          <option value="Moderate">Moderate</option>
+          <option value="Off-Peak">Off-Peak</option>
+        </select>
+      </div>
+
+      <div class="summary">
+        <span>Total Rows: {{ filteredReportRows.length }}</span>
+        <span>Total Seconds: {{ totalReportSeconds }}</span>
+        <span>Total Plays: {{ totalPlayCount }}</span>
+        <span>Total Cost: {{ formatCurrency(totalReportCost) }}</span>
+      </div>
+
+      @if (isLoadingReport) {
+      <p class="loading-text">Loading report...</p>
+      } @else if (!filteredReportRows.length) {
+      <p class="empty-text">No log-based cost data for selected filters.</p>
+      } @else {
+      <div class="table-wrap">
+      <table class="table report-table">
+        <thead>
+          <tr>
+            <th>Advertisement</th>
+            <th>Traffic Level</th>
+            <th>Play Count</th>
+            <th>Total Seconds</th>
+            <th>Cost / Second</th>
+            <th>Total Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of filteredReportRows; track row.advertisementId + '-' + row.trafficLevel) {
+          <tr>
+            <td>{{ row.advertisementName }} <span class="muted">({{ row.advertisementId }})</span></td>
+            <td><span class="traffic-pill" [class]="'pill-' + row.trafficLevel.toLowerCase()">{{ row.trafficLevel }}</span></td>
+            <td>{{ row.playCount }}</td>
+            <td>{{ row.totalSeconds }}</td>
+            <td>{{ formatCurrency(row.costPerSecond) }}</td>
+            <td>{{ formatCurrency(row.totalCost) }}</td>
+          </tr>
+          }
+        </tbody>
+      </table>
+      </div>
+      }
+    </section>
+
+    <section class="card">
+      <h2>Playback Time Logs</h2>
+
+      <div class="filters">
+        <div class="field date-field">
+          <label>Start Date</label>
+          <input class="input" type="date" [(ngModel)]="startDate" />
+        </div>
+        <div class="field date-field">
+          <label>End Date</label>
+          <input class="input" type="date" [(ngModel)]="endDate" />
+        </div>
+        <div class="field">
+          <label>Advertisement ID</label>
+          <input class="input" type="text" [(ngModel)]="logsAdvertisementId" placeholder="Optional" />
+        </div>
+        <div class="field">
+          <label>Max Rows</label>
+          <input class="input" type="number" min="1" max="1000" [(ngModel)]="logsLimit" />
+        </div>
+        <div class="filter-actions filter-actions-secondary">
+          <button class="btn" (click)="loadPlaybackLogs()">Load Logs</button>
+          <button class="btn secondary" (click)="exportLogsCsv()">Export Logs CSV</button>
+        </div>
+      </div>
+
+      <div class="table-tools">
+        <input class="input search" type="text" [(ngModel)]="logsSearchTerm" placeholder="Search by ad name or ID" />
+        <select class="input traffic-filter" [(ngModel)]="logsTrafficFilter">
+          <option value="All">All Traffic</option>
+          <option value="Peak">Peak</option>
+          <option value="Moderate">Moderate</option>
+          <option value="Off-Peak">Off-Peak</option>
+        </select>
+      </div>
+
+      <div class="summary">
+        <span>Total Logs: {{ totalPlaybackRows }}</span>
+        <span>Total Playback Seconds: {{ totalPlaybackSeconds }}</span>
+      </div>
+
+      @if (isLoadingLogs) {
+      <p class="loading-text">Loading playback logs...</p>
+      } @else if (!filteredPlaybackLogs.length) {
+      <p class="empty-text">No playback logs for selected filters.</p>
+      } @else {
+      <div class="table-wrap">
+      <table class="table report-table">
+        <thead>
+          <tr>
+            <th>Advertisement</th>
+            <th>Traffic Level</th>
+            <th>Duration (s)</th>
+            <th>Played At</th>
+            <th>Logged At</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of filteredPlaybackLogs; track row.id) {
+          <tr>
+            <td>{{ row.advertisementName }} <span class="muted">({{ row.advertisementId }})</span></td>
+            <td><span class="traffic-pill" [class]="'pill-' + row.trafficLevel.toLowerCase()">{{ row.trafficLevel }}</span></td>
+            <td>{{ row.durationSeconds }}</td>
+            <td>{{ row.playedAt | date:'medium' }}</td>
+            <td>{{ row.createdAt | date:'medium' }}</td>
+          </tr>
+          }
+        </tbody>
+      </table>
+      </div>
+      }
+    </section>
+  </div>
+</div>

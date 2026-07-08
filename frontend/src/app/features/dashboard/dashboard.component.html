@@ -1,0 +1,231 @@
+<div class="dashboard-page">
+  <app-header></app-header>
+
+  <div class="dashboard-content">
+    <!-- Loading State -->
+    <div *ngIf="loading" class="loading-message">
+      Loading dashboard data...
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="error" class="error-message">
+      {{ error }}
+    </div>
+
+    <!-- Dashboard Content -->
+    <div *ngIf="!loading">
+    <!-- Stats Cards -->
+    <section class="stats-cards">
+      <div class="stat-card">
+        <div class="stat-label">Today<br>Scheduled Trips</div>
+        <div class="stat-value">{{ stats.todayDepartures }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Today<br>Active Trips</div>
+        <div class="stat-value">{{ stats.todayArrivals }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Delayed<br>Arrivals</div>
+        <div class="stat-value">{{ stats.delayedArrivals }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Delayed<br>Departures</div>
+        <div class="stat-value">{{ stats.delayedDepartures }}</div>
+      </div>
+    </section>
+
+    <section class="broadcast-panel">
+      <div class="broadcast-form-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Broadcast Messaging</h3>
+          <p class="chart-subtitle">Create lounge-wide messages with duration and frequency rules</p>
+          <div class="broadcast-master-control">
+            <label class="broadcast-master-toggle">
+              <input type="checkbox" [(ngModel)]="broadcastsEnabled" (change)="toggleBroadcasts()" />
+              Master Enable: <span [class.enabled]="broadcastsEnabled">{{ broadcastsEnabled ? 'ON' : 'OFF' }}</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="broadcast-form-grid">
+          <textarea
+            [(ngModel)]="broadcastForm.message"
+            placeholder="Enter broadcast message"
+            rows="3"></textarea>
+
+          <div class="broadcast-inline-grid">
+            <label>
+              Priority
+              <select [(ngModel)]="broadcastForm.priority">
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </label>
+
+            <label>
+              Duration (seconds)
+              <input type="number" min="1" [(ngModel)]="broadcastForm.displayDurationSeconds" />
+            </label>
+
+            <label>
+              Frequency (seconds)
+              <input type="number" min="1" [(ngModel)]="broadcastForm.frequencySeconds" />
+            </label>
+          </div>
+
+          <div class="broadcast-inline-grid">
+            <label>
+              Start Time
+              <input type="datetime-local" [(ngModel)]="broadcastForm.startAt" />
+            </label>
+
+            <label>
+              End Time
+              <input type="datetime-local" [(ngModel)]="broadcastForm.endAt" />
+            </label>
+          </div>
+
+          <div class="broadcast-toggle-row">
+            <label><input type="checkbox" [(ngModel)]="broadcastForm.isActive" /> Active</label>
+            <label><input type="checkbox" [(ngModel)]="broadcastForm.showOnLoungeTV" /> Show on lounge TV</label>
+          </div>
+
+          <button class="broadcast-submit-btn" [disabled]="broadcastSaving" (click)="createBroadcastMessage()">
+            {{ broadcastSaving ? 'Saving...' : 'Create Broadcast Message' }}
+          </button>
+
+          <div class="error-message" *ngIf="broadcastError">{{ broadcastError }}</div>
+        </div>
+      </div>
+
+      <div class="broadcast-list-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Current Broadcast Messages</h3>
+        </div>
+
+        <div class="broadcast-list-empty" *ngIf="!broadcastMessages.length">No broadcast messages created yet.</div>
+        <div class="broadcast-list" *ngIf="broadcastMessages.length">
+          <div class="broadcast-item" *ngFor="let item of broadcastMessages">
+            <div class="broadcast-item-message">{{ item.message }}</div>
+            <div class="broadcast-item-meta">
+              <span>{{ item.priority | uppercase }}</span>
+              <span>{{ item.displayDurationSeconds }}s every {{ item.frequencySeconds }}s</span>
+              <span>{{ item.showOnLoungeTV ? 'TV: ON' : 'TV: OFF' }}</span>
+              <span>{{ item.isActive ? 'Active' : 'Paused' }}</span>
+            </div>
+            <div class="broadcast-actions">
+              <button (click)="toggleBroadcastMessage(item)">{{ item.isActive ? 'Pause' : 'Activate' }}</button>
+              <button class="danger" (click)="deleteBroadcastMessage(item)">Delete</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- First Row: Routes per Arrivals & Routes per Lounges -->
+    <section class="charts-grid charts-grid-2col">
+      <!-- Chart 1: Routes per Lounges -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Lounges per route</h3>
+          <p class="chart-subtitle">Number of lounges serving each route</p>
+        </div>
+        <div class="chart-content">
+          <div class="bar-chart">
+            <div class="bar-item" *ngFor="let route of routesPerLounges">
+              <div class="bar-wrapper">
+                <div class="bar-fill" 
+                     [style.height.%]="getBarHeight(route.lounges, getMaxValue(routesPerLounges, 'lounges'))">
+                  <span class="bar-value">{{ route.lounges }}</span>
+                </div>
+              </div>
+              <div class="bar-label">{{ route.route }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+     <!-- Chart 2: Advertisement Categories -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Advertisement Schedule Types</h3>
+          <p class="chart-subtitle">Distribution by scheduling type</p>
+        </div>
+        <div class="chart-content">
+          <div class="bar-chart horizontal">
+            <div class="bar-item" *ngFor="let category of advertisementCategories">
+              <div class="bar-label-left">{{ category.category }}</div>
+              <div class="bar-wrapper-horizontal">
+                <div class="bar-fill-horizontal" 
+                     [style.width.%]="getBarHeight(category.count, getMaxValue(advertisementCategories, 'count'))">
+                  <span class="bar-value">{{ category.count }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Third Row: Advertisement Status & Media Categories (Pie Charts) -->
+    <section class="charts-grid charts-grid-2col">
+      <!-- Chart 5: Advertisement Status (Pie Chart) -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Advertisement Status</h3>
+          <p class="chart-subtitle">Current status distribution</p>
+        </div>
+        <div class="chart-content">
+          <div class="pie-chart-container">
+            <svg class="pie-chart" viewBox="0 0 200 200">
+              <path class="pie-slice" 
+                    *ngFor="let status of advertisementStatus; let i = index"
+                    [attr.d]="getStatusPieSlicePath(i)"
+                    [attr.fill]="status.color"
+                    [attr.stroke]="'#ffffff'"
+                    stroke-width="2">
+              </path>
+            </svg>
+            <div class="pie-legend">
+              <div class="legend-item" *ngFor="let status of advertisementStatus">
+                <span class="legend-color" [style.background]="status.color"></span>
+                <span class="legend-label">{{ status.label }}</span>
+                <span class="legend-value">{{ status.value }} ({{ status.percentage | number:'1.0-0' }}%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart 6: Media Categories of Advertisement (Pie Chart) -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Media Categories of Advertisement</h3>
+          <p class="chart-subtitle">Distribution by media category</p>
+        </div>
+        <div class="chart-content">
+          <div class="pie-chart-container">
+            <svg class="pie-chart" viewBox="0 0 200 200">
+              <path class="pie-slice" 
+                    *ngFor="let category of mediaCategories; let i = index"
+                    [attr.d]="getMediaPieSlicePath(i)"
+                    [attr.fill]="category.color"
+                    [attr.stroke]="'#ffffff'"
+                    stroke-width="2">
+              </path>
+            </svg>
+            <div class="pie-legend">
+              <div class="legend-item" *ngFor="let category of mediaCategories">
+                <span class="legend-color" [style.background]="category.color"></span>
+                <span class="legend-label">{{ category.label }}</span>
+                <span class="legend-value">{{ category.value }} ({{ category.percentage | number:'1.0-0' }}%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    </div><!-- End of Dashboard Content -->
+  </div>
+</div>

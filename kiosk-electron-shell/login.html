@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b1120;
+            --card-bg: #111827;
+            --input-bg: #1f2937;
+            --text-main: #ffffff;
+            --text-muted: #9ca3af;
+            --accent-blue: #38bdf8;
+            --border-color: #374151;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 60% 30%, rgba(56, 189, 248, 0.15) 0%, transparent 40%);
+            color: var(--text-main);
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 480px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 9999px;
+            border: 1px solid var(--border-color);
+            background: rgba(17, 24, 39, 0.5);
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+
+        .badge-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-blue);
+            border-radius: 50%;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin: 0 0 16px 0;
+            letter-spacing: -0.02em;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 1rem;
+            line-height: 1.5;
+            margin-bottom: 32px;
+            max-width: 400px;
+        }
+
+        #login-form {
+            background: var(--card-bg);
+            padding: 32px;
+            border-radius: 24px;
+            border: 1px solid var(--border-color);
+        }
+
+        .section-header {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.875rem;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px 16px;
+            box-sizing: border-box;
+            background: var(--input-bg);
+            border: 1px solid transparent;
+            border-radius: 12px;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        input::placeholder {
+            color: #6b7280;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--border-color);
+            background: #273142;
+        }
+
+        .show-password {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 0;
+            width: auto;
+            margin: 0;
+        }
+
+        button[type="submit"] {
+            width: 100%;
+            padding: 14px;
+            margin-top: 12px;
+            background-color: var(--accent-blue);
+            color: #000;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            font-family: inherit;
+        }
+
+        button[type="submit"]:hover {
+            opacity: 0.9;
+        }
+
+        #error-message {
+            color: #ef4444;
+            margin-top: 16px;
+            font-size: 0.875rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="badge">
+            <div class="badge-dot"></div>
+            KIOSK ADMIN CONSOLE
+        </div>
+        
+        <h1>Welcome back</h1>
+        <p class="subtitle">Sign in to manage lounge setup, scheduling controls, and kiosk configuration from one place.</p>
+        
+        <form id="login-form">
+            <div class="section-header">SECURE ACCESS</div>
+            
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" placeholder="admin@company.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <div class="input-wrapper">
+                    <input type="password" id="password" name="password" placeholder="Enter your password" required>
+                    <button type="button" class="show-password" onclick="togglePassword()">Show</button>
+                </div>
+            </div>
+            
+            <!-- Hidden button to trigger submit, or we can use JS to submit -->
+            <button type="submit" style="display: none;">Login</button>
+            <p id="error-message" style="display: none;"></p>
+        </form>
+    </div>
+
+    <script>
+        function togglePassword() {
+            const pwdInput = document.getElementById('password');
+            const pwdBtn = document.querySelector('.show-password');
+            if (pwdInput.type === 'password') {
+                pwdInput.type = 'text';
+                pwdBtn.textContent = 'Hide';
+            } else {
+                pwdInput.type = 'password';
+                pwdBtn.textContent = 'Show';
+            }
+        }
+
+        // We trigger submit on enter key or similar, but the UI doesn't show a login button
+        // Wait, looking at the screenshot, maybe the submit button is cut off? 
+        // I will add the submit button because users need to login.
+        // Actually, let me add the submit button matching the admin.html "Save Configuration" button.
+        
+        document.getElementById('login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            window.electron.login({ username, password });
+        });
+
+        window.electron.onLoginResult((message) => {
+            const errorMessage = document.getElementById('error-message');
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        });
+        
+        // Let's add the button explicitly so it's usable
+        const form = document.getElementById('login-form');
+        const submitBtn = document.createElement('button');
+        submitBtn.type = 'submit';
+        submitBtn.textContent = 'Log In';
+        form.insertBefore(submitBtn, document.getElementById('error-message'));
+        form.querySelector('button[style="display: none;"]').remove();
+    </script>
+</body>
+</html>

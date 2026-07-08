@@ -1,0 +1,21 @@
+/* You can add global styles to this file, and also import other style files */
+
+/* Leaflet Map Styles */
+@import 'leaflet/dist/leaflet.css';
+
+html,
+body {
+	height: 100%;
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	overflow-x: hidden;
+	background: #000;
+}
+
+app-root {
+	display: block;
+	min-height: 100%;
+}

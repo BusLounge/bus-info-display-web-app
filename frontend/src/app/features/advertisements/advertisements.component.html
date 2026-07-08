@@ -1,0 +1,832 @@
+<div class="dashboard-page">
+  <app-header></app-header>
+
+  <div class="dashboard-content">
+    <div class="page-title">Advertisement Management</div>
+
+    <!-- Navigation Bar -->
+    <div class="nav-tabs">
+      <button class="nav-tab" [class.active]="activeTab === 'advertisements'" (click)="switchTab('advertisements')">Advertisements</button>
+      <button class="nav-tab" [class.active]="activeTab === 'groups'" (click)="switchTab('groups')">Advertisement Groups</button>
+    </div>
+
+    <!-- Section Header for Advertisements -->
+    <div class="section-header" *ngIf="activeTab === 'advertisements'">
+      <h2>Advertisements</h2>
+      <button class="add-advertisment-button" (click)="openModal()">Add advertisment</button>
+    </div>
+
+    <!-- Section Header for Advertisement Groups -->
+    <div class="section-header" *ngIf="activeTab === 'groups'">
+      <h2>Advertisement Groups</h2>
+      <button class="add-advertisment-button" (click)="openGroupModal()">Create advertisment group</button>
+    </div>
+
+    <div class="top-controls">
+      <div class="search-container">
+        <input type="text" class="search-input" placeholder="Search Advertisments.................." [(ngModel)]="searchTerm">
+      </div>
+    </div>
+
+    <div class="active-lounge-filter" *ngIf="selectedLoungeName">
+      <span>Showing advertisements for lounge: {{ selectedLoungeName }}</span>
+      <button type="button" class="clear-filter-button" (click)="clearLoungeFilter()">Clear lounge filter</button>
+    </div>
+
+    <!-- Advertisements Table -->
+    <div class="advertisements-container" *ngIf="activeTab === 'advertisements'">
+      <section class="advertisements-section">
+        <div class="table-wrapper">
+          
+          <table class="advertisements-table">
+            <thead>
+              <tr>
+                <th>ADD NAME</th>
+                <th>CATEGORY</th>
+                <th>DURATION</th>
+                <th>SCHEDULE TYPE</th>
+                <th>LOUNGE GROUPS</th>
+                <th>PRIORITY</th>
+                <th>VERSION</th>
+                <th>REMARKS</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let ad of filteredAdvertisements; trackBy: trackByAdvertisement">
+                <td>{{ ad.name }}</td>
+                <td>{{ ad.category }}</td>
+                <td>{{ ad.duration }}</td>
+                <td>{{ ad.scheduleType }}</td>
+                <td>{{ ad.loungeGroups }}</td>
+                <td><span class="priority" [ngClass]="ad.priority.toLowerCase()">{{ ad.priority }}</span></td>
+                <td>{{ ad.version || 'v1.0' }}</td>
+                <td><span class="status" [ngClass]="ad.status.toLowerCase()">{{ ad.status }}</span></td>
+                <td class="view-icons">
+                  <span class="icon" (click)="viewAdvertisement(ad)">👁</span>
+                  <span class="icon" (click)="editAdvertisement(ad)">✎</span>
+                  <span class="icon delete-icon" (click)="deleteAdvertisement(ad)" title="Delete advertisement">🗑</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- Advertisement Groups Table -->
+    <div class="advertisements-container" *ngIf="activeTab === 'groups'">
+      <section class="advertisements-section">
+        <div class="table-wrapper">
+          
+          <table class="advertisements-table">
+            <thead>
+              <tr>
+                <th>GROUP NAME</th>
+                <th>LOUNGES</th>
+                <th>NUMBER OF ADDS</th>
+                <th>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let group of filteredAdvertisementGroups; trackBy: trackByGroup">
+                <td>{{ group.groupName }}</td>
+                <td>{{ getLoungesDisplay(group.lounges) }}</td>
+                <td>{{ group.noOfAdvertisements }}</td>
+                <td class="view-icons">
+                  <span class="icon" (click)="viewGroup(group)">👁</span>
+                  <span class="icon" (click)="editGroup(group)">✎</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- Add Advertisement Modal -->
+<div class="modal-overlay" *ngIf="showModal" (click)="closeModal()">
+  <div class="modal-container" (click)="$event.stopPropagation()">
+    <h2 class="modal-title" [style.background-color]="isEmergencyCategory ? '#ff4444' : ''">
+      {{ isViewMode ? 'VIEW ADVERTISMENT' : (isEditMode ? 'EDIT ADVERTISMENT' : 'ADD NEW ADVERTISMENT') }}
+      <span *ngIf="isEmergencyCategory" style="margin-left: 10px;">⚠️ EMERGENCY BROADCAST</span>
+    </h2>
+    
+    <!-- Emergency Alert Banner -->
+    <div *ngIf="isEmergencyCategory && !isViewMode" style="background: #fff3cd; border: 2px solid #ff4444; padding: 15px; margin-bottom: 20px; border-radius: 8px;">
+      <p style="margin: 0; color: #856404; font-weight: bold;">
+        ⚠️ EMERGENCY MODE ACTIVATED
+      </p>
+      <p style="margin: 5px 0 0 0; color: #856404; font-size: 13px;">
+        This advertisement will be broadcast immediately to selected lounge groups with highest priority. 
+        Recommendation: Select all lounge groups for maximum reach during emergencies.
+      </p>
+    </div>
+    
+    <div class="modal-content">
+      <div class="form-row">
+        <div class="form-group flex-1">
+          <label>Name</label>
+          <input type="text" class="form-input" [(ngModel)]="viewData.name" [readonly]="isViewMode">
+        </div>
+        <div class="form-group flex-1">
+          <label>File upload</label>
+          <input type="file" class="form-input file-input" accept="image/*,video/mp4,video/webm,video/ogg,video/quicktime,video/x-msvideo,.avi" (change)="onFileSelected($event)" *ngIf="!isViewMode">
+          <p class="file-selection-display" *ngIf="!isViewMode && (selectedFile?.name || viewData.fileName)">
+            {{ selectedFile?.name ? ('New file selected: ' + selectedFile?.name) : ('Current media file: ' + viewData.fileName) }}
+          </p>
+          <input type="text" class="form-input" [value]="viewData.fileName || 'No file uploaded'" readonly *ngIf="isViewMode">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group flex-1">
+          <label>Lounge Group <span *ngIf="isEmergencyCategory" style="color: #ff4444; font-size: 12px;">(Recommended: Select all groups for emergency)</span></label>
+          
+          <!-- Selected groups tags -->
+          <div class="selected-lounges" *ngIf="selectedGroups.length > 0 && !isViewMode">
+            <span class="lounge-tag" *ngFor="let group of selectedGroups; trackBy: trackByString">
+              {{ group }}
+              <span class="remove-tag" (click)="removeGroup(group)">×</span>
+            </span>
+          </div>
+
+          <!-- Dropdown for Create/Edit Mode -->
+          <div class="lounge-dropdown" *ngIf="!isViewMode">
+            <input type="text" 
+                   class="form-input lounge-search" 
+                   placeholder="Select lounge group" 
+                   [(ngModel)]="groupSearchTerm">
+            <span class="dropdown-arrow" (click)="showGroupDropdown = !showGroupDropdown">▼</span>
+
+            <!-- Dropdown menu -->
+            <div class="dropdown-menu" *ngIf="showGroupDropdown">
+              <div class="dropdown-header">
+                <button class="clear-btn" (click)="clearAllGroups()">Clear</button>
+              </div>
+              
+              <div class="dropdown-options">
+                <label class="checkbox-label" *ngFor="let group of filteredSortedGroups; trackBy: trackByString">
+                  <input type="checkbox" 
+                         [checked]="isGroupSelected(group)" 
+                         (change)="toggleGroup(group)">
+                  <span>{{ group }}</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- View Mode -->
+          <input type="text" class="form-input" [value]="viewData.loungeGroups" readonly *ngIf="isViewMode">
+        </div>
+        <div class="form-group flex-1">
+          <label>Media Category</label>
+          <select class="form-select" [(ngModel)]="viewData.category" (change)="onCategoryChange($event)" [disabled]="isViewMode">
+            <option value="" disabled selected>Select category</option>
+            <option>Internal Branding</option>
+            <option>Commercial</option>
+            <option>Event</option>
+            <option>Seasonal</option>
+            <option>Emergency</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group form-group-small">
+          <label>Media Duration</label>
+          <input
+            type="text"
+            class="form-input"
+            [(ngModel)]="viewData.duration"
+            (ngModelChange)="onDurationInputChange()"
+            [readonly]="isViewMode"
+            placeholder="e.g. 10s"
+          >
+
+          <div class="slot-helper" *ngIf="!isViewMode">
+            <div class="slot-helper-head">
+              <span>Ad cycle: 30s total (traffic-based split: Peak 20/10, Moderate 18/12, Off-Peak 15/15)</span>
+              <button type="button" class="slot-refresh-btn" (click)="refreshAvailableSlotsForSelectedGroups()">Refresh</button>
+            </div>
+
+            <div class="slot-summary-line">
+              Enter ad duration first. Max allowed for this traffic level: {{ maxAllowedAdDurationSeconds }} seconds.
+            </div>
+
+            <div class="slot-summary-line">
+              Date: {{ slotBaseDateLabel }}
+            </div>
+
+            <div class="slot-summary-line">
+              Fixed bus schedule window: {{ slotBusScheduleWindowLabel }}
+            </div>
+
+            <div class="slot-summary-line">
+              Advertisement window (traffic split): {{ slotAdWindowLabel }} ({{ selectedTrafficAdWindowSeconds }}s)
+            </div>
+
+            <div class="slot-loading" *ngIf="slotHelperLoading">Loading available slots...</div>
+            <div class="slot-error" *ngIf="!slotHelperLoading && slotHelperError">{{ slotHelperError }}</div>
+
+            <div class="slot-summary-line" *ngIf="!slotHelperLoading && selectedGroups.length === 0">
+              No lounge group selected yet. Showing default traffic window.
+            </div>
+
+            <div *ngIf="!slotHelperLoading && !slotHelperError">
+              <div class="slot-summary-line">
+                Available window after booked ads:
+                {{ slotAvailableWindowLabel }} ({{ effectiveAvailableSeconds }}s)
+              </div>
+
+              <div class="slot-summary-line" *ngIf="selectedGroups.length > 0 && commonAvailableSeconds === selectedTrafficAdWindowSeconds">
+                No scheduled advertisements currently. Full ad window is available.
+              </div>
+
+              <div class="slot-summary-line" *ngIf="selectedGroups.length > 0 && commonAvailableSeconds === 0">
+                No ad slot available right now for selected lounge group(s).
+              </div>
+
+              <div class="slot-summary-line" *ngIf="selectedDurationSeconds <= 0">
+                Enter duration to view exact playable slots.
+              </div>
+
+              <div class="slot-error" *ngIf="selectedDurationSeconds > maxAllowedAdDurationSeconds">
+                Ad duration exceeds the allowed {{ maxAllowedAdDurationSeconds }} seconds for this traffic level.
+              </div>
+
+              <div class="slot-error" *ngIf="selectedDurationSeconds > 0 && selectedDurationSeconds <= maxAllowedAdDurationSeconds && selectedDurationSeconds > effectiveAvailableSeconds && effectiveAvailableSeconds > 0">
+                This duration is not available. Choose {{ effectiveAvailableSeconds }}s or less.
+              </div>
+
+              <div class="slot-summary-line" *ngIf="selectedDurationSeconds > 0 && effectiveAvailableSeconds === 0 && availableExactSlotsForSelectedDuration.length > 0">
+                Traffic window is fully booked, but some exact time slots are still available below.
+              </div>
+
+              <div class="slot-error" *ngIf="selectedDurationSeconds > 0 && effectiveAvailableSeconds === 0 && availableExactSlotsForSelectedDuration.length === 0">
+                No free advertisement seconds are left in this traffic window for the selected lounge group(s).
+              </div>
+
+              <div class="slot-error" *ngIf="durationOverflowSeconds > 0 && effectiveAvailableSeconds > 0">
+                Selected duration exceeds available ad window by {{ durationOverflowSeconds }}s.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group form-group-small">
+          <label>Priority level <span *ngIf="isEmergencyCategory" style="color: #ff4444; font-size: 12px;">(Auto-set for Emergency)</span></label>
+          <select class="form-select" [(ngModel)]="viewData.priority" [disabled]="isViewMode || isEmergencyCategory">
+            <option value="" disabled selected>Select Priority</option>
+            <option>High</option>
+            <option>Medium</option>
+            <option>Low</option>
+          </select>
+        </div>
+        <div class="form-group form-group-small">
+          <label>Version</label>
+          <input type="text" class="form-input" [(ngModel)]="viewData.version" [readonly]="isViewMode" placeholder="v1.0">
+        </div>
+        <div class="form-group flex-2">
+          <label>Description</label>
+          <textarea class="form-textarea" rows="3" [(ngModel)]="viewData.description" [readonly]="true"></textarea>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group form-group-small">
+          <label>Schedule Type <span *ngIf="isEmergencyCategory" style="color: #ff4444; font-size: 12px;">(Emergency: Immediate Display)</span></label>
+          <select class="form-select" [(ngModel)]="scheduleType" (change)="onScheduleTypeChange($event)" [disabled]="isViewMode || isEmergencyCategory">
+            <option>Recurring</option>
+            <option>One-time</option>
+            <option>On startup</option>
+            <option>On Idle</option>
+          </select>
+        </div>
+        <div class="form-group form-group-small">
+          <label class="checkbox-label enabled-checkbox">
+            <input type="checkbox" [(ngModel)]="isEnabled" [disabled]="isViewMode"> Enabled
+          </label>
+        </div>
+      </div>
+
+      <div class="form-row traffic-row">
+        <div class="form-group flex-1">
+          <label>Traffic Level</label>
+          <select class="form-select" [(ngModel)]="selectedTrafficLevel" (change)="onTrafficLevelChange()" [disabled]="isViewMode">
+            <option value="">Select traffic level</option>
+            <option value="Peak">Peak</option>
+            <option value="Moderate">Moderate</option>
+            <option value="Off-Peak">Off-Peak</option>
+          </select>
+        </div>
+
+        <div class="form-group flex-2">
+          <label>Time Period</label>
+          <select class="form-select" [(ngModel)]="selectedTimePeriodName" (change)="onTimePeriodChange()" [disabled]="isViewMode">
+            <option value="">Select time period</option>
+            <option *ngFor="let period of filteredTrafficTimePeriods" [value]="period.name">
+              {{ period.name }} ({{ formatTrafficPeriod(period) }}) - {{ period.trafficLevel }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <div class="traffic-periods-box" *ngIf="isViewMode">
+        <div class="traffic-periods-title">Selected Traffic Settings</div>
+
+        <div class="slot-summary-line">
+          Traffic level: {{ selectedTrafficLevel || 'Not set' }}
+        </div>
+
+        <div class="slot-summary-line">
+          Time period:
+          {{ selectedTrafficTimePeriod ? (selectedTrafficTimePeriod.name + ' (' + formatTrafficPeriod(selectedTrafficTimePeriod) + ')') : (selectedTimePeriodName || 'Not set') }}
+        </div>
+
+        <div class="slot-summary-line" *ngIf="selectedSlotLabelsForView.length === 0">
+          Selected time slots: Not set
+        </div>
+
+        <div class="slot-summary-line" *ngIf="selectedSlotLabelsForView.length > 0">
+          Selected time slots ({{ selectedSlotLabelsForView.length }}):
+        </div>
+
+        <div class="selected-slots-list" *ngIf="selectedSlotLabelsForView.length > 0">
+          <div class="selected-slot-item" *ngFor="let slotLabel of selectedSlotLabelsForView; trackBy: trackByString">
+            {{ slotLabel }}
+          </div>
+        </div>
+      </div>
+
+      <div class="traffic-periods-box" *ngIf="!isViewMode">
+        <div class="traffic-periods-title">Available Time Periods</div>
+        <table class="traffic-periods-table">
+          <thead>
+            <tr>
+              <th>Time Period</th>
+              <th>Time Slot</th>
+              <th>Traffic Level</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              *ngFor="let period of filteredTrafficTimePeriods"
+              [class.selected-period]="selectedTimePeriodName === period.name"
+            >
+              <td>{{ period.name }}</td>
+              <td>{{ formatTrafficPeriod(period) }}</td>
+              <td>{{ period.trafficLevel }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="slot-helper below-periods" *ngIf="!isViewMode">
+        <div class="slot-helper-head">
+          <span>Available Time Slots (within selected time period)</span>
+        </div>
+
+        <div class="slot-summary-line" *ngIf="selectedDurationSeconds <= 0">
+          Enter duration first to view available slots.
+        </div>
+
+        <div class="slot-summary-line" *ngIf="exactTimeSlotsForSelectedDuration.length > 0">
+          Total slots in selected period: {{ timePeriodSlotCount }}
+        </div>
+
+        <div class="slot-summary-line" *ngIf="exactTimeSlotsForSelectedDuration.length > 0">
+          Available: {{ availableTimePeriodSlotCount }} | Booked: {{ bookedTimePeriodSlotCount }}
+        </div>
+
+        <div class="slot-summary-line" *ngIf="exactTimeSlotsForSelectedDuration.length > 0">
+          Legend: Total {{ timePeriodSlotCount }}, Booked {{ bookedTimePeriodSlotCount }}, Free {{ availableTimePeriodSlotCount }}
+        </div>
+
+        <div class="slot-chip-row" *ngIf="exactTimeSlotsForSelectedDuration.length > 0">
+          <button
+            type="button"
+            class="slot-chip"
+            *ngFor="let slot of exactTimeSlotsForSelectedDuration; trackBy: trackByExactSlot"
+            [class.selected]="selectedExactSlotStartIsos.includes(slot.startIso)"
+            [class.booked]="isExactSlotBooked(slot.startIso)"
+            [disabled]="isExactSlotBooked(slot.startIso)"
+            (click)="pickExactTimeSlot(slot.startIso)"
+            [title]="formatExactSlot(slot)"
+          >
+            {{ formatExactSlot(slot) }}
+          </button>
+        </div>
+
+        <div class="slot-summary-line" *ngIf="bookedExactSlotsForSelectedDuration.length > 0">
+          Booked time slots (already reserved):
+        </div>
+
+        <div class="selected-slots-list" *ngIf="bookedExactSlotsForSelectedDuration.length > 0">
+          <div class="selected-slot-item booked-slot-item" *ngFor="let slot of bookedExactSlotsForSelectedDuration; trackBy: trackByExactSlot">
+            {{ formatExactSlot(slot) }}
+          </div>
+        </div>
+
+        <div class="slot-summary-line" *ngIf="bookedExactSlotLegendRows.length > 0">
+          Booked slot advertisement IDs:
+        </div>
+
+        <div class="selected-slots-list" *ngIf="bookedExactSlotLegendRows.length > 0">
+          <div class="selected-slot-item booked-slot-item" *ngFor="let row of bookedExactSlotLegendRows; trackBy: trackByBookedLegendRow">
+            {{ formatExactSlot(row.slot) }} | Ads: {{ row.advertisementIds.join(', ') }}
+          </div>
+        </div>
+
+        <div class="slot-summary-line" *ngIf="exactTimeSlotsForSelectedDuration.length > 0 && selectedExactSlotStartIsos.length === 0">
+          Select one or more exact time slots to choose when this ad should play.
+        </div>
+
+        <div class="slot-summary-line" *ngIf="selectedExactSlotStartIsos.length > 0">
+          Selected time slots ({{ selectedExactSlotStartIsos.length }}):
+        </div>
+
+        <div class="selected-slots-list" *ngIf="selectedExactSlotStartIsos.length > 0">
+          <div class="selected-slot-item" *ngFor="let slot of selectedExactSlots; trackBy: trackByExactSlot">
+            {{ formatExactSlot(slot) }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Recurring Schedule Type -->
+      <div *ngIf="scheduleType === 'Recurring'" class="recurring-container">
+        <div class="form-row">
+          <div class="frequency-column">
+            <div class="form-section flex-1">
+              <h3 class="section-title">Frequency</h3>
+              <div class="form-group">
+                <label>Occurs</label>
+                <select class="form-select" [(ngModel)]="occursType" (change)="onOccursTypeChange($event)" [disabled]="isViewMode">
+                  <option>Daily</option>
+                  <option>Weekly</option>
+                  <option>Monthly</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Recurrence interval</label>
+                <input type="number" class="form-input" [(ngModel)]="recurrenceInterval" [readonly]="isViewMode">
+              </div>
+            </div>
+
+            <div class="form-section flex-1">
+              <h3 class="section-title">Duration</h3>
+              <div class="form-group">
+                <label>Start date:</label>
+                <input type="date" class="form-input" [(ngModel)]="startDate" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+              </div>
+              <div class="form-group">
+                <label class="radio-label">
+                  <input type="radio" name="enddate" [value]="false" [(ngModel)]="noEndDate" (ngModelChange)="updateDescription()" [disabled]="isViewMode"> End date:
+                </label>
+                <input type="date" class="form-input" [(ngModel)]="endDate" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+              </div>
+              <div class="form-group">
+                <label class="radio-label">
+                  <input type="radio" name="enddate" [value]="true" [(ngModel)]="noEndDate" (ngModelChange)="updateDescription()" [disabled]="isViewMode"> No end date
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Daily Frequency -->
+          <div class="form-section flex-1" *ngIf="occursType === 'Daily'">
+            <h3 class="section-title">Daily Frequency</h3>
+            <div class="form-group">
+              <label class="radio-label">
+                <input type="radio" name="frequency" [(ngModel)]="frequencyType" value="once" (ngModelChange)="updateDescription()" [disabled]="isViewMode"> Occurs once at:
+              </label>
+              <input type="time" class="form-input" [(ngModel)]="occursOnceTime" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+            </div>
+            <div class="form-group">
+              <label class="radio-label">
+                <input type="radio" name="frequency" [(ngModel)]="frequencyType" value="every" (ngModelChange)="updateDescription()" [disabled]="isViewMode"> Occurs every:
+              </label>
+              <div class="inline-inputs">
+                <input type="number" class="form-input small" [(ngModel)]="occursEveryInterval" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+                <select class="form-select" [(ngModel)]="occursEveryUnit" (ngModelChange)="updateDescription()" [disabled]="isViewMode">
+                  <option>Hourly</option>
+                  <option>Minutes</option>
+                  <option>Secs</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Starting at:</label>
+              <input type="time" class="form-input" [(ngModel)]="startingTime" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+            </div>
+            <div class="form-group">
+              <label>Ending at:</label>
+              <input type="time" class="form-input" [(ngModel)]="endingTime" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+            </div>
+          </div>
+
+          <!-- Weekly Frequency -->
+          <div class="form-section flex-1" *ngIf="occursType === 'Weekly'">
+            <h3 class="section-title">Weekly Frequency</h3>
+            <div class="form-group">
+              <label>Weekly days:</label>
+              <div class="weekday-checkboxes">
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="weeklyMonday" [disabled]="isViewMode"> Monday
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="weeklyTuesday" [disabled]="isViewMode"> Tuesday
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="weeklyWednesday" [disabled]="isViewMode"> Wednesday
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="weeklyThursday" [disabled]="isViewMode"> Thursday
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="weeklyFriday" [disabled]="isViewMode"> Friday
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="weeklySaturday" [disabled]="isViewMode"> Saturday
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="weeklySunday" [disabled]="isViewMode"> Sunday
+                </label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="radio-label">
+                <input type="radio" name="weeklyFrequency" [(ngModel)]="frequencyType" value="once" (ngModelChange)="updateDescription()" [disabled]="isViewMode"> Occurs once at:
+              </label>
+              <input type="time" class="form-input" [(ngModel)]="occursOnceTime" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+            </div>
+            <div class="form-group">
+              <label class="radio-label">
+                <input type="radio" name="weeklyFrequency" [(ngModel)]="frequencyType" value="every" (ngModelChange)="updateDescription()" [disabled]="isViewMode"> Occurs every:
+              </label>
+              <div class="inline-inputs">
+                <input type="number" class="form-input small" [(ngModel)]="occursEveryInterval" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+                <select class="form-select" [(ngModel)]="occursEveryUnit" (ngModelChange)="updateDescription()" [disabled]="isViewMode">
+                  <option>Hourly</option>
+                  <option>Minutes</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Starting at:</label>
+              <input type="time" class="form-input" [(ngModel)]="startingTime" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+            </div>
+            <div class="form-group">
+              <label>Ending at:</label>
+              <input type="time" class="form-input" [(ngModel)]="endingTime" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+            </div>
+          </div>
+
+          <!-- Monthly Frequency -->
+          <div class="form-section flex-1" *ngIf="occursType === 'Monthly'">
+            <h3 class="section-title">Monthly Frequency</h3>
+            <div class="form-group">
+              <label class="radio-label">
+                <input type="radio" name="monthlyType" [(ngModel)]="monthlyType" value="dayOfMonth" [disabled]="isViewMode"> Day of month:
+              </label>
+              <input type="number" class="form-input" min="1" max="31" [(ngModel)]="monthlyDayOfMonth" [readonly]="isViewMode" placeholder="Enter day (1-31)">
+            </div>
+            <div class="form-group">
+              <label class="radio-label">
+                <input type="radio" name="monthlyType" [(ngModel)]="monthlyType" value="weekday" [disabled]="isViewMode"> Monthly week:
+              </label>
+              <div class="inline-inputs">
+                <select class="form-select" [(ngModel)]="monthlyWeek" [disabled]="isViewMode">
+                  <option>First</option>
+                  <option>Second</option>
+                  <option>Third</option>
+                  <option>Fourth</option>
+                  <option>Last</option>
+                </select>
+                <select class="form-select" [(ngModel)]="monthlyDay" [disabled]="isViewMode">
+                  <option>Monday</option>
+                  <option>Tuesday</option>
+                  <option>Wednesday</option>
+                  <option>Thursday</option>
+                  <option>Friday</option>
+                  <option>Saturday</option>
+                  <option>Sunday</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="radio-label">
+                <input type="radio" name="monthlyFrequency" [(ngModel)]="frequencyType" value="once" (ngModelChange)="updateDescription()" [disabled]="isViewMode"> Occurs once at:
+              </label>
+              <input type="time" class="form-input" [(ngModel)]="occursOnceTime" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+            </div>
+            <div class="form-group">
+              <label class="radio-label">
+                <input type="radio" name="monthlyFrequency" [(ngModel)]="frequencyType" value="every" (ngModelChange)="updateDescription()" [disabled]="isViewMode"> Occurs every:
+              </label>
+              <div class="inline-inputs">
+                <input type="number" class="form-input small" [(ngModel)]="occursEveryInterval" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+                <select class="form-select" [(ngModel)]="occursEveryUnit" (ngModelChange)="updateDescription()" [disabled]="isViewMode">
+                  <option>Hourly</option>
+                  <option>Minutes</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Starting at:</label>
+              <input type="time" class="form-input" [(ngModel)]="startingTime" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+            </div>
+            <div class="form-group">
+              <label>Ending at:</label>
+              <input type="time" class="form-input" [(ngModel)]="endingTime" (ngModelChange)="updateDescription()" [readonly]="isViewMode">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- One-time Schedule Type -->
+      <div *ngIf="scheduleType === 'One-time'">
+        <div class="form-section">
+          <h3 class="section-title">Schedule date and Time</h3>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Schedule date:</label>
+              <input type="date" class="form-input" [(ngModel)]="oneTimeScheduleDate" [readonly]="isViewMode">
+            </div>
+            <div class="form-group flex-1">
+              <label>Schedule time:</label>
+              <input type="time" class="form-input" [(ngModel)]="oneTimeScheduleTime" [readonly]="isViewMode">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- On startup Schedule Type -->
+      <div *ngIf="scheduleType === 'On startup'">
+        <div class="form-section">
+          <h3 class="section-title">Schedule Date and Time</h3>
+          <div class="info-box">
+            <strong>Info:</strong> This ad will trigger automatically as soon as the lounge display software boots up.
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label force-play-checkbox">
+              <input type="checkbox" checked [disabled]="isViewMode"> Force play before any other scheduled ads
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- On Idle Schedule Type -->
+      <div *ngIf="scheduleType === 'On Idle'">
+        <div class="form-section">
+          <h3 class="section-title">Schedule Date and Time</h3>
+          <div class="info-box">
+            <strong>Info:</strong> This ad acts as "Filler." It will play only when the system has no other ads scheduled to run.
+          </div>
+          <div class="form-group">
+            <label>Max idle loop duration (minutes):</label>
+            <input type="number" class="form-input" [(ngModel)]="maxIdleLoopDuration" style="width: 100px;" [readonly]="isViewMode">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-save" (click)="saveAdvertisement()" [disabled]="!canSaveAdvertisement" *ngIf="!isViewMode">Save</button>
+        <button class="btn-cancel" (click)="closeModal()">{{ isViewMode ? 'Close' : 'Cancel' }}</button>
+      </div>
+
+      <p class="validation-hint" *ngIf="!isViewMode && !canSaveAdvertisement">
+        Required before saving: ad media, ad name, valid duration, lounge group, and priority level.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Create/Edit Advertisement Group Modal -->
+<div class="modal-overlay" *ngIf="showGroupModal" (click)="closeGroupModal()">
+  <div class="group-modal-container" (click)="$event.stopPropagation()">
+    <h2 class="group-modal-title">{{ isViewGroupMode ? 'View Advertisement Group' : (isEditGroupMode ? 'Edit Advertisement Group' : 'Create Advertisement Group') }}</h2>
+    
+    <div class="group-modal-content">
+      <!-- Group Name -->
+      <div class="form-group">
+        <label>Group Name</label>
+        <input type="text" class="form-input" [(ngModel)]="groupData.groupName" placeholder="Group A" [readonly]="isViewGroupMode">
+      </div>
+
+      <!-- Select Lounges -->
+      <div class="form-group">
+        <label>{{ isViewGroupMode ? 'Selected lounges' : 'Select lounges' }}</label>
+        
+        <!-- Selected lounges tags -->
+        <div class="selected-lounges" *ngIf="selectedLounges.length > 0">
+          <span class="lounge-tag" *ngFor="let lounge of selectedLounges; trackBy: trackByString">
+            {{ lounge }}
+            <span class="remove-tag" (click)="removeLounge(lounge)" *ngIf="!isViewGroupMode">×</span>
+          </span>
+        </div>
+
+        <!-- Dropdown (only for Create/Edit mode) -->
+        <div class="lounge-dropdown" *ngIf="!isViewGroupMode">
+          <input type="text" 
+                 class="form-input lounge-search" 
+                 placeholder="Search lounge" 
+                 [(ngModel)]="loungeSearchTerm">
+          <span class="dropdown-arrow">▼</span>
+
+          <!-- Dropdown menu -->
+          <div class="dropdown-menu" *ngIf="showLoungeDropdown">
+            <div class="dropdown-header">
+              <label class="checkbox-label">
+                <input type="checkbox" [checked]="isAllLoungesSelected()" (change)="toggleSelectAll()">
+                <span>Select All</span>
+              </label>
+              <button class="clear-btn" (click)="clearAllLounges()">Clear</button>
+            </div>
+            
+            <div class="dropdown-options">
+              <label class="checkbox-label" *ngFor="let lounge of filteredSortedLounges; trackBy: trackByString">
+                <input type="checkbox" 
+                       [checked]="isLoungeSelected(lounge)" 
+                       (change)="toggleLounge(lounge)">
+                <span>{{ lounge }}</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Advertisements and Number fields (View mode only) -->
+      <div class="form-row" *ngIf="isViewGroupMode">
+        <div class="form-group flex-2">
+          <label>Advertisements</label>
+          <div class="advertisements-list">
+            <div class="ad-item" *ngFor="let ad of groupAdvertisements; trackBy: trackByString">{{ ad }}</div>
+          </div>
+        </div>
+        <div class="form-group flex-1">
+          <label>Number of advertisements</label>
+          <input type="text" class="form-input" [value]="groupAdvertisements.length" readonly>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="group-modal-actions" [ngClass]="{'view-mode': isViewGroupMode}">
+        <button class="btn-save" (click)="saveGroup()" *ngIf="!isViewGroupMode">Save</button>
+        <button class="btn-cancel-gray" (click)="closeGroupModal()">{{ isViewGroupMode ? 'Close' : 'Cancel' }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule Conflict Modal -->
+<div class="modal-overlay" *ngIf="showConflictModal" (click)="closeConflictModal()">
+  <div class="conflict-modal-container" (click)="$event.stopPropagation()">
+    <h2 class="conflict-modal-title">Advertisement Schedule Conflict</h2>
+    
+    <div class="conflict-message">
+      <p>{{ conflictData.message }}</p>
+    </div>
+
+    <div class="conflict-options-title">Please select one of the following options:</div>
+
+    <div class="conflict-options">
+      <div class="conflict-option" [class.selected]="selectedConflictOption === 'remove'" (click)="selectConflictOption('remove')">
+        <span class="option-icon">
+          <svg width="30" height="30" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="20" cy="20" r="18" fill="#2D5BFF" stroke="#2D5BFF" stroke-width="2"/>
+            <path d="M14 14L26 26M26 14L14 26" stroke="white" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="option-text">{{ conflictData.removeOption }}</span>
+      </div>
+
+      <div class="conflict-option" [class.selected]="selectedConflictOption === 'changeTime'" (click)="selectConflictOption('changeTime')">
+        <span class="option-icon">
+          <svg width="30" height="30" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="20" cy="20" r="18" fill="#2D5BFF" stroke="#2D5BFF" stroke-width="2"/>
+            <circle cx="20" cy="20" r="12" stroke="white" stroke-width="2.5" fill="none"/>
+            <path d="M20 14V20L25 23" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="option-text">Change Time slot</span>
+      </div>
+
+      <div class="conflict-option" [class.selected]="selectedConflictOption === 'cancel'" (click)="selectConflictOption('cancel')">
+        <span class="option-icon">
+          <svg width="30" height="30" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="20" cy="20" r="18" stroke="#2D5BFF" stroke-width="3" fill="white"/>
+            <path d="M10 30L30 10" stroke="#2D5BFF" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="option-text">Cancel</span>
+      </div>
+    </div>
+
+    <div class="conflict-modal-actions">
+      <button class="btn-confirm" (click)="confirmConflictResolution()">Confirm</button>
+      <button class="btn-cancel-conflict" (click)="closeConflictModal()">Cancel</button>
+    </div>
+  </div>
+</div>

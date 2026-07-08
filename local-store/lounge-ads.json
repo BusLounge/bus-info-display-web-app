@@ -1,0 +1,18 @@
+{
+  "loungeId": "f2995524-0e45-4ebd-87e6-689c818c0572",
+  "updatedAt": "2026-03-31T04:40:00.4287455Z",
+  "sourceUrl": "http://localhost:8083/api/lounge-ads/lounge/f2995524-0e45-4ebd-87e6-689c818c0572",
+  "items": [
+    {
+      "id": "f38de183-5e77-4747-9c35-98221eae7692",
+      "loungeId": "f2995524-0e45-4ebd-87e6-689c818c0572",
+      "advertisementName": "Lounge Fallback Default",
+      "mediaUrl": "/local/media/f38de183-5e77-4747-9c35-98221eae7692.mp4",
+      "mediaType": "video",
+      "durationSeconds": 24,
+      "priority": "normal",
+      "isActive": true,
+      "isDefaultForAll": true
+    }
+  ]
+}

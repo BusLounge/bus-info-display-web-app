@@ -1,0 +1,379 @@
+<div class="dashboard">
+  <!-- Minimalistic Header -->
+  <header class="dashboard-header">
+    <div class="header-content">
+      <div class="logo-section">
+        <h1 class="logo">Digital Signage Control</h1>
+        <p class="subtitle">Bus Lounge Management System</p>
+      </div>
+      <div class="stats-bar">
+        <div class="stat-card" [class.pulse]="stats().online > 0">
+          <div class="stat-icon">✓</div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats().online }}</div>
+            <div class="stat-label">Online</div>
+          </div>
+        </div>
+        <div class="stat-card" [class.pulse-warning]="stats().offline > 0">
+          <div class="stat-icon">✕</div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats().offline }}</div>
+            <div class="stat-label">Offline</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">◉</div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats().total }}</div>
+            <div class="stat-label">Total</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="dashboard-content">
+    <!-- Minimalistic Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>Devices</h2>
+        <span class="device-count">{{ devices().length }}</span>
+      </div>
+      <div class="device-list">
+        @for (device of devices(); track device.id) {
+          <div
+            class="device-card"
+            [class.active]="selectedDevice()?.id === device.id"
+            [class.online]="device.status === 'online'"
+            [class.offline]="device.status === 'offline'"
+            (click)="selectDevice(device)">
+            <div class="device-indicator"></div>
+            <div class="device-info">
+              <h3 class="device-name">{{ device.loungeName }}</h3>
+              <p class="device-id">{{ device.name }}</p>
+              <div class="device-footer">
+                <span class="connection-quality">
+                  {{ getConnectionQuality(device).icon }}
+                </span>
+                <span class="sync-time">{{ getTimeSinceSync(device) }}</span>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      @if (selectedDevice(); as device) {
+        <!-- Device Header with Quick Actions -->
+        <section class="device-header">
+          <div class="header-left">
+            <h2 class="lounge-name">{{ device.loungeName }}</h2>
+            <div class="device-meta-row">
+              <span class="meta-item">
+                <span class="meta-icon">●</span>
+                <span [style.color]="getStatusColor(device.status)">{{ device.status }}</span>
+              </span>
+              <span class="meta-item">
+                <span class="meta-icon">📍</span>
+                {{ device.location }}
+              </span>
+              <span class="meta-item">
+                <span class="meta-icon">⚡</span>
+                {{ getConnectionQuality(device).label }}
+              </span>
+            </div>
+          </div>
+          <div class="header-actions">
+            <button
+              class="action-btn secondary"
+              [class.spinning]="isRefreshing()"
+              (click)="refreshDevice(device.id)">
+              <span class="btn-icon">🔄</span>
+              <span class="btn-text">Refresh</span>
+            </button>
+            <button class="action-btn primary" (click)="forceSyncDevice(device.id)">
+              <span class="btn-icon">⚡</span>
+              <span class="btn-text">Force Sync</span>
+            </button>
+            <div class="quick-actions-wrapper">
+              <button class="action-btn icon-only" (click)="toggleQuickActions()">
+                <span class="btn-icon">⋮</span>
+              </button>
+              @if (showQuickActions()) {
+                <div class="quick-actions-menu">
+                  <button class="menu-item" (click)="viewDeviceLogs(device.id)">
+                    📋 View Logs
+                  </button>
+                  <button class="menu-item" (click)="restartDevice(device.id)">
+                    🔄 Restart Device
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        </section>
+
+        <div class="panel-tabs">
+          <button
+            class="panel-tab"
+            [class.active]="activePanel() === 'controls'"
+            (click)="setActivePanel('controls')">
+            TV Controls
+          </button>
+          <button
+            class="panel-tab"
+            [class.active]="activePanel() === 'lounge-ads'"
+            (click)="setActivePanel('lounge-ads')">
+            Lounge Ads
+          </button>
+        </div>
+
+        <!-- Comprehensive Config Grid -->
+        @if (activePanel() === 'controls') {
+        <div class="config-grid">
+
+          <!-- Display Mode - Large Card -->
+          <section class="config-card featured">
+            <div class="card-header">
+              <h3 class="card-title">Display Mode</h3>
+              <span class="card-icon">📺</span>
+            </div>
+            <div class="mode-selector">
+              @for (mode of displayModes; track mode.value) {
+                <button
+                  class="mode-option"
+                  [class.selected]="device.displayMode === mode.value"
+                  (click)="updateDisplayMode(mode.value)">
+                  <div class="mode-icon">{{ mode.icon }}</div>
+                  <div class="mode-label">{{ mode.label }}</div>
+                  <div class="mode-check">✓</div>
+                </button>
+              }
+            </div>
+          </section>
+
+          <!-- Layout Configuration -->
+          <section class="config-card" [class.disabled]="device.displayMode !== 'both'">
+            <div class="card-header">
+              <h3 class="card-title">Layout</h3>
+              <span class="card-icon">🖼️</span>
+            </div>
+            @if (device.displayMode === 'both') {
+              <div class="layout-selector">
+                @for (layout of layoutModes; track layout.value) {
+                  <button
+                    class="layout-option"
+                    [class.selected]="device.layoutMode === layout.value"
+                    (click)="updateLayoutMode(layout.value)">
+                    <div class="layout-icon">{{ layout.icon }}</div>
+                    <div class="layout-info">
+                      <div class="layout-name">{{ layout.label }}</div>
+                      <div class="layout-desc">{{ layout.description }}</div>
+                    </div>
+                  </button>
+                }
+              </div>
+
+              <!-- Display Timing Info -->
+              <div class="timing-info">
+                <div class="timing-item">
+                  <span class="timing-label">Schedule Duration</span>
+                  <span class="timing-value">{{ displayTiming.scheduleDuration }}s</span>
+                </div>
+                <div class="timing-item">
+                  <span class="timing-label">Cycle Interval</span>
+                  <span class="timing-value">{{ displayTiming.scheduleInterval }}s</span>
+                </div>
+                <div class="timing-item">
+                  <span class="timing-label">Ad Duration</span>
+                  <span class="timing-value">{{ displayTiming.adDuration }}s</span>
+                </div>
+              </div>
+            } @else {
+              <div class="disabled-message">
+                <p>Available only in Hybrid mode</p>
+              </div>
+            }
+          </section>
+
+          <!-- Language Selection - Minimalistic -->
+          <section class="config-card compact">
+            <div class="card-header">
+              <h3 class="card-title">Language</h3>
+              <span class="card-icon">🌐</span>
+            </div>
+            <div class="language-selector">
+              @for (lang of languages; track lang.code) {
+                <button
+                  class="lang-option"
+                  [class.selected]="device.language === lang.code"
+                  (click)="updateLanguage(lang.code)">
+                  <div class="lang-flag">{{ lang.flag }}</div>
+                  <div class="lang-info">
+                    <div class="lang-native">{{ lang.nativeName }}</div>
+                    <div class="lang-english">{{ lang.name }}</div>
+                  </div>
+                  <div class="lang-check">✓</div>
+                </button>
+              }
+            </div>
+          </section>
+
+          <section class="config-card compact">
+            <div class="card-header">
+              <h3 class="card-title">Broadcast Messages</h3>
+              <span class="card-icon">📢</span>
+            </div>
+
+            <div class="broadcast-toggle-row">
+              <span>Show on Lounge TV</span>
+              <button
+                class="action-btn secondary"
+                [class.active-toggle]="broadcastsEnabled()"
+                (click)="updateBroadcastDisplay(!broadcastsEnabled())">
+                {{ broadcastsEnabled() ? 'Enabled' : 'Disabled' }}
+              </button>
+              <button class="action-btn secondary" (click)="syncBroadcastsNow()">
+                Sync Now
+              </button>
+            </div>
+
+            <div class="broadcast-list" *ngIf="broadcasts().length; else noBroadcasts">
+              <div class="broadcast-item" *ngFor="let item of broadcasts()">
+                <div class="broadcast-message">{{ item.message }}</div>
+                <div class="broadcast-meta">
+                  every {{ item.frequencySeconds }}s for {{ item.displayDurationSeconds }}s
+                </div>
+              </div>
+            </div>
+            <ng-template #noBroadcasts>
+              <p class="broadcast-empty">No active broadcast messages synced.</p>
+            </ng-template>
+          </section>
+
+          
+
+          <!-- Device Info - Comprehensive -->
+          <section class="config-card info-card">
+            <div class="card-header">
+              <h3 class="card-title">Device Information</h3>
+              <span class="card-icon">ℹ️</span>
+            </div>
+            <div class="info-grid">
+              <div class="info-row">
+                <span class="info-label">Network</span>
+                <span class="info-value">{{ device.ipAddress }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">MAC Address</span>
+                <span class="info-value">{{ device.macAddress || 'N/A' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Last Sync</span>
+                <span class="info-value">{{ device.lastSyncTime | date:'short' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Connection</span>
+                <span class="info-value" [style.color]="getConnectionQuality(device).color">
+                  {{ getConnectionQuality(device).label }}
+                </span>
+              </div>
+             <div class="info-row">
+                <span class="info-label">Uptime</span>
+                <span class="info-value">{{ getDeviceUptime(device) }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Location</span>
+                <span class="info-value">{{ device.location }}</span>
+              </div>
+            </div>
+          </section>
+
+          
+        </div>
+        }
+
+        @if (activePanel() === 'lounge-ads') {
+        <section class="config-card lounge-ads-panel">
+          <div class="card-header">
+            <h3 class="card-title">Lounge Ads</h3>
+            <span class="card-icon">🧩</span>
+          </div>
+
+          <p class="lounge-ad-note">
+            Upload lounge-specific videos/images. These are used as fallback content when no scheduled ad is active.
+          </p>
+
+          @if (loungeAdSlots(); as slots) {
+          <div class="slot-summary-mini">
+            <div>Schedule: {{ slots.scheduleWindowSeconds }}s</div>
+            <div>Ad Window: {{ slots.adWindowSeconds }}s</div>
+            <div>Company Booked: {{ slots.bookedSeconds }}s</div>
+            <div>Available: {{ slots.remainingSeconds }}s</div>
+          </div>
+          }
+
+          @if (loungeAdError()) {
+          <div class="error-message">{{ loungeAdError() }}</div>
+          }
+
+          <div class="lounge-ad-form-grid">
+            <input type="text" placeholder="Advertisement name" [(ngModel)]="loungeAdForm.advertisementName" />
+
+            <div class="inline-grid-2">
+              <label class="file-upload-field">
+                <span>Select Video/Image</span>
+                <input type="file" accept="video/*,image/*" (change)="onLoungeAdFileSelected($event)" />
+              </label>
+              <div class="helper-text">
+                {{ selectedLoungeAdMediaFile?.name || (editingLoungeAdId() ? 'Keep existing media if no file selected' : 'No file selected') }}
+              </div>
+            </div>
+
+            <div class="inline-grid-2">
+              <label><input type="checkbox" [(ngModel)]="loungeAdForm.isActive" /> Active</label>
+              <label><input type="checkbox" [(ngModel)]="loungeAdForm.isDefaultForAll" /> Default for all lounges</label>
+            </div>
+
+            <div class="inline-grid-2">
+              <button class="action-btn primary" (click)="createLocalLoungeAd()" [disabled]="isCreatingLoungeAd()">
+                {{ isCreatingLoungeAd() ? (editingLoungeAdId() ? 'Saving...' : 'Creating...') : (editingLoungeAdId() ? 'Save Changes' : 'Create Lounge Ad') }}
+              </button>
+              @if (editingLoungeAdId()) {
+              <button class="action-btn secondary" (click)="cancelEditLoungeAd()" [disabled]="isCreatingLoungeAd()">
+                Cancel Edit
+              </button>
+              }
+            </div>
+          </div>
+
+          <div class="lounge-ad-list" *ngIf="loungeAds().length; else emptyLoungeAds">
+            <div class="lounge-ad-item" *ngFor="let ad of loungeAds()">
+              <div class="lounge-ad-name">{{ ad.advertisementName }}</div>
+              <div class="lounge-ad-meta">{{ ad.mediaType }} | {{ ad.isActive ? 'Active' : 'Inactive' }} | {{ ad.isDefaultForAll ? 'Default' : 'Lounge-specific' }}</div>
+              <div class="lounge-ad-meta">{{ ad.mediaUrl }}</div>
+              <div class="lounge-ad-actions">
+                <button class="action-btn secondary" (click)="startEditLoungeAd(ad)">Edit Video</button>
+                <button class="action-btn danger" (click)="deleteLoungeAd(ad)">Delete</button>
+              </div>
+            </div>
+          </div>
+
+          <ng-template #emptyLoungeAds>
+            <p class="broadcast-empty">No local lounge ads found.</p>
+          </ng-template>
+        </section>
+        }
+      } @else {
+        <!-- Empty State -->
+        <div class="empty-state">
+          <div class="empty-icon">📱</div>
+          <h3>No Device Selected</h3>
+          <p>Select a device from the sidebar to view and configure its settings</p>
+        </div>
+      }
+    </main>
+  </div>
+</div>

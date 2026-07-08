@@ -1,0 +1,204 @@
+<app-header />
+
+<div class="route-editor-page">
+  <div class="route-editor-container">
+    <div class="editor-layout">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>{{ isEditMode ? 'Edit Route' : 'Create New Route' }}</h2>
+        <button (click)="goBack()" class="btn-back">← Back</button>
+      </div>
+
+      <div *ngIf="error" class="error-message">
+        {{ error }}
+      </div>
+
+      <!-- Route Details Form -->
+      <div class="form-section">
+        <h3>Route Details</h3>
+        
+        <div class="form-group">
+          <label for="routeName">Route Name *</label>
+          <input 
+            type="text" 
+            id="routeName"
+            [(ngModel)]="routeName" 
+            placeholder="e.g., Colombo to Kandy"
+            class="form-input"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="originCity">Origin City *</label>
+          <input 
+            type="text" 
+            id="originCity"
+            [(ngModel)]="originCity" 
+            placeholder="e.g., Colombo"
+            class="form-input"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="destinationCity">Destination City *</label>
+          <input 
+            type="text" 
+            id="destinationCity"
+            [(ngModel)]="destinationCity" 
+            placeholder="e.g., Kandy"
+            class="form-input"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="totalDistance">Distance (km)</label>
+          <input 
+            type="text" 
+            id="totalDistance"
+            [(ngModel)]="totalDistance" 
+            readonly
+            class="form-input"
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input 
+              type="checkbox" 
+              [(ngModel)]="isActive"
+            />
+            <span>Active Route</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Edit Mode Selector -->
+      <div class="form-section">
+        <h3>Edit Mode</h3>
+        <div class="edit-mode-grid">
+          <button 
+            (click)="setEditMode('add')"
+            [class.active]="editModeType === 'add'"
+            class="mode-btn"
+          >
+            ➕ Add
+          </button>
+          <button 
+            (click)="setEditMode('insert')"
+            [class.active]="editModeType === 'insert'"
+            class="mode-btn"
+          >
+            ➕➖ Insert
+          </button>
+          <button 
+            (click)="setEditMode('move')"
+            [class.active]="editModeType === 'move'"
+            class="mode-btn"
+          >
+            ✋ Move
+          </button>
+          <button 
+            (click)="setEditMode('select')"
+            [class.active]="editModeType === 'select'"
+            class="mode-btn"
+          >
+            🔲 Select
+          </button>
+        </div>
+
+        <div class="mode-help">
+          <p *ngIf="editModeType === 'add'">
+            Click on map to add points. Click markers to delete.
+          </p>
+          <p *ngIf="editModeType === 'insert'">
+            Click near a line segment to insert points between existing points.
+          </p>
+          <p *ngIf="editModeType === 'move'">
+            Drag markers to reposition points.
+          </p>
+          <p *ngIf="editModeType === 'select'">
+            Click markers to select multiple points for deletion.
+          </p>
+        </div>
+      </div>
+
+      <!-- Points List -->
+      <div class="form-section">
+        <div class="points-header">
+          <h3>Points ({{ points.length }})</h3>
+          <div class="points-actions">
+            <button 
+              *ngIf="selectedPoints.size > 0"
+              (click)="deleteSelectedPoints()"
+              class="btn-small btn-danger"
+            >
+              Delete ({{ selectedPoints.size }})
+            </button>
+            <button 
+              *ngIf="points.length > 0"
+              (click)="clearAllPoints()"
+              class="btn-small btn-warning"
+            >
+              Clear All
+            </button>
+            <button 
+              *ngIf="points.length > 0"
+              (click)="focusAllPoints()"
+              class="btn-small btn-secondary"
+            >
+              Focus All
+            </button>
+          </div>
+        </div>
+
+        <div class="points-list">
+          <div *ngIf="points.length === 0" class="empty-points">
+            No points added yet. Click on the map to add points.
+          </div>
+
+          <div 
+            *ngFor="let point of points; let i = index"
+            class="point-item"
+            [class.highlighted]="highlightedPointIndex === i"
+            [class.selected]="selectedPoints.has(i)"
+            (click)="highlightPoint(i)"
+          >
+            <div class="point-info">
+              <span class="point-number">Point {{ i + 1 }}</span>
+              <span class="point-coords">
+                {{ point.lat.toFixed(6) }}, {{ point.lng.toFixed(6) }}
+              </span>
+            </div>
+            <button 
+              (click)="deletePoint(i); $event.stopPropagation()"
+              class="btn-delete-point"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="form-section">
+        <button 
+          (click)="saveRoute()"
+          [disabled]="isSaving || points.length < 2"
+          class="btn-save"
+        >
+          {{ isSaving ? 'Saving...' : (isEditMode ? '💾 Update Route' : '💾 Create Route') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div class="map-container">
+      <div *ngIf="!isBrowser" class="map-loading">
+        <p>Loading map...</p>
+      </div>
+      <div id="map" class="map" [style.display]="isBrowser ? 'block' : 'none'"></div>
+    </div>
+  </div>
+  </div>
+</div>

@@ -1,0 +1,187 @@
+.lounge-page {
+	min-height: 100vh;
+	background: #f5f7fb;
+}
+
+.lounge-content {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 24px;
+}
+
+.page-intro {
+	background: #ffffff;
+	border: 1px solid #dbe4f0;
+	border-radius: 12px;
+	padding: 20px;
+	margin-bottom: 16px;
+
+	h1 {
+		margin: 0 0 6px 0;
+		font-size: 1.4rem;
+		color: #0f172a;
+	}
+
+	p {
+		margin: 0;
+		color: #475569;
+	}
+}
+
+.intro-actions {
+	display: flex;
+	gap: 10px;
+	margin-top: 14px;
+}
+
+.summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 18px;
+	margin-top: 12px;
+	color: #334155;
+	font-weight: 600;
+}
+
+.btn-primary,
+.btn-secondary {
+	border: none;
+	border-radius: 8px;
+	padding: 10px 14px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.btn-primary {
+	background: #2563eb;
+	color: #ffffff;
+}
+
+.btn-secondary {
+	background: #e2e8f0;
+	color: #0f172a;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.loading-box,
+.error-box {
+	background: #ffffff;
+	border: 1px solid #dbe4f0;
+	border-radius: 12px;
+	padding: 16px;
+	margin-bottom: 14px;
+}
+
+.error-box {
+	border-color: #fecaca;
+	background: #fff7f7;
+	color: #b91c1c;
+}
+
+.lounge-list {
+	display: grid;
+	gap: 14px;
+}
+
+.lounge-card {
+	background: #ffffff;
+	border: 1px solid #dbe4f0;
+	border-radius: 12px;
+	padding: 16px;
+}
+
+.lounge-card__header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+
+	h2 {
+		margin: 0;
+		font-size: 1.1rem;
+		color: #0f172a;
+	}
+}
+
+.lounge-card__meta {
+	margin: 4px 0 0 0;
+	color: #64748b;
+	font-size: 0.85rem;
+}
+
+.status-row {
+	margin-top: 14px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	align-items: center;
+}
+
+.status-pill {
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-weight: 700;
+	font-size: 0.8rem;
+}
+
+.status-pill--valid {
+	background: #dcfce7;
+	color: #166534;
+}
+
+.status-pill--invalid {
+	background: #fee2e2;
+	color: #991b1b;
+}
+
+.status-detail {
+	color: #334155;
+	font-weight: 600;
+	font-size: 0.9rem;
+}
+
+.invalid-table {
+	margin-top: 12px;
+	overflow-x: auto;
+
+	table {
+		width: 100%;
+		border-collapse: collapse;
+		min-width: 720px;
+	}
+
+	th,
+	td {
+		text-align: left;
+		border-bottom: 1px solid #e2e8f0;
+		padding: 10px;
+		font-size: 0.9rem;
+		vertical-align: top;
+	}
+
+	th {
+		color: #475569;
+		font-weight: 700;
+		background: #f8fafc;
+	}
+}
+
+@media (max-width: 768px) {
+	.lounge-content {
+		padding: 14px;
+	}
+
+	.lounge-card__header {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.intro-actions {
+		flex-direction: column;
+	}
+}
