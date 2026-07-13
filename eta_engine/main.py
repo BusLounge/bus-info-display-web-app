@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 import json
 
-app = FastAPI(title="ETA Engine ML Service", version="1.0.1", description="Service for predicting bus arrival times")
+app = FastAPI(title="ETA Engine ML Service", version="1.0.1", description="Service for predicting bus arrival and departure times for lounges")
 
 xgb_model = None
 label_encoders = None
