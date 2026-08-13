@@ -1,6 +1,29 @@
 {
-  "loungeGroup": "Sunny Lounge",
-  "updatedAt": "2026-05-27T23:51:24.2481408Z",
-  "sourceUrl": "http://localhost:8083/api/tv/ads/Sunny%20Lounge",
-  "items": []
+  "loungeGroup": "alohaRavePluse",
+  "updatedAt": "2026-08-03T05:29:14.6476884Z",
+  "sourceUrl": "http://localhost:8083/api/tv/ads/alohaRavePluse",
+  "items": [
+    {
+      "id": "9da75295-cf43-4a31-9b69-67cbbfb69d62",
+      "name": "Planetaria",
+      "mediaUrl": "https://res.cloudinary.com/dwzls3uwe/video/upload/v1782186391/sts-advertisements/whdim9uv3zb1cva0k0qe.mp4",
+      "mediaType": "video",
+      "mediaDuration": 10,
+      "localFile": "9da75295-cf43-4a31-9b69-67cbbfb69d62.mp4",
+      "mediaHash": "3e2a10c9df111ad8978ae279ec1cc188b69ad49640c4139d8c6a8b304bacf5fc",
+      "sourceVersion": "3e2a10c9df111ad8978ae279ec1cc188b69ad49640c4139d8c6a8b304bacf5fc",
+      "priority": "medium",
+      "scheduleType": "recurring",
+      "frequency": "daily",
+      "startDate": "2026-06-23T00:00:00Z",
+      "endDate": "2027-06-23T00:00:00Z",
+      "startTime": "12:00:00",
+      "endTime": "23:59:00",
+      "playTimeSlot": "12:00 PM",
+      "playTimeSlots": [
+        "12:00 PM"
+      ],
+      "nextPlayAt": "2026-08-03T06:30:00Z"
+    }
+  ]
 }
