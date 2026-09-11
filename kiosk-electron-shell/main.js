@@ -167,7 +167,13 @@ function createMainWindow() {
     }
   });
 
-  mainWindow.loadFile('index.html');
+  const angularIndexPath = path.join(__dirname, 'www', 'index.html');
+
+  if (fs.existsSync(angularIndexPath)) {
+    mainWindow.loadURL('http://localhost:4200/bids-display');
+  } else {
+    mainWindow.loadFile('index.html');
+  }
 
   mainWindow.on('closed', function () {
     mainWindow = null;
