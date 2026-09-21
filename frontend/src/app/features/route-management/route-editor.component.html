@@ -123,6 +123,38 @@
         </div>
       </div>
 
+      <div class="form-section" *ngIf="segments.length > 0">
+        <h3>Road Types</h3>
+        <p class="mode-help">Click a colored map segment or choose one below, then assign its road type.</p>
+
+        <label class="form-group" *ngIf="selectedSegment">
+          <span>Selected Segment {{ selectedSegment.segmentOrder }}</span>
+          <select
+            class="form-input"
+            [ngModel]="selectedSegment.roadType"
+            (ngModelChange)="setSelectedSegmentRoadType($event)">
+            <option *ngFor="let roadType of roadTypes" [ngValue]="roadType">
+              {{ roadType | titlecase }}
+            </option>
+          </select>
+        </label>
+
+        <div class="segment-selector-list">
+          <button
+            type="button"
+            class="segment-selector"
+            *ngFor="let segment of segments; let i = index"
+            [class.selected]="selectedSegmentIndex === i"
+            (click)="selectSegment(i)">
+            <span
+              class="segment-color"
+              [style.backgroundColor]="getRoadTypeColor(segment.roadType)"></span>
+            <span>Segment {{ segment.segmentOrder }}</span>
+            <strong>{{ segment.roadType | titlecase }}</strong>
+          </button>
+        </div>
+      </div>
+
       <!-- Points List -->
       <div class="form-section">
         <div class="points-header">

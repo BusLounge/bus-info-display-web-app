@@ -4,7 +4,7 @@ import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { HeaderComponent } from '../../shared/components/header/header.component';
-import { RouteService, MasterRoute } from '../../core/services/route.service';
+import { RouteService, ActiveRouteDetails } from '../../core/services/route.service';
 import { TripService, Trip, RouteWithTrips } from '../../core/services/trip.service';
 import { generateSegments, RouteSegment, decodePolyline } from '../../core/utils/polyline.utils';
 
@@ -41,14 +41,14 @@ export class RouteManagementComponent implements OnInit {
 
     // Fetch both routes and trips simultaneously
     forkJoin({
-      routes: this.routeService.getAllRoutes(),
+      routes: this.routeService.getActiveRoutesWithDetails(),
       trips: this.tripService.getAllTrips()
     }).subscribe({
-      next: (data: { routes: MasterRoute[], trips: Trip[] }) => {
+      next: (data: { routes: ActiveRouteDetails[], trips: Trip[] }) => {
         this.allTrips = data.trips;
         
         // Merge trip data with route data and decode polylines
-        this.routes = data.routes.map((route: MasterRoute) => {
+        this.routes = data.routes.map((route: ActiveRouteDetails) => {
           const routeTrips = data.trips.filter((trip: Trip) => trip.route_id === route.id);
           
           // Decode polyline and generate segments
@@ -62,7 +62,10 @@ export class RouteManagementComponent implements OnInit {
               decodedPointCount = points.length;
 
               if (points.length >= 2) {
-                segments = generateSegments(points);
+                segments = generateSegments(points).map((segment, index) => ({
+                  ...segment,
+                  roadType: route.segments?.[index]?.roadType,
+                }));
               } else {
                 segmentError = 'Polyline has fewer than 2 points.';
               }

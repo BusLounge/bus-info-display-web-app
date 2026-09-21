@@ -29,6 +29,18 @@ func (h *RouteHandler) GetAllRoutes(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(routes)
 }
 
+// GetActiveRoutesWithDetails handles GET /api/routes/active-with-details
+func (h *RouteHandler) GetActiveRoutesWithDetails(w http.ResponseWriter, r *http.Request) {
+	routes, err := h.routeService.GetActiveRoutesWithDetails(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(routes)
+}
+
 // GetRouteByID handles GET /api/routes/{id}
 func (h *RouteHandler) GetRouteByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

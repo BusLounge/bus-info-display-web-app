@@ -78,6 +78,45 @@
 .form-group {
   margin-bottom: 1rem;
 
+
+.segment-selector-list {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.segment-selector {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #374151;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &.selected {
+    border-color: #111827;
+    background: #f3f4f6;
+  }
+
+  strong {
+    font-size: 0.75rem;
+    color: #111827;
+  }
+}
+
+.segment-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
   label {
     display: block;
     font-size: 0.875rem;

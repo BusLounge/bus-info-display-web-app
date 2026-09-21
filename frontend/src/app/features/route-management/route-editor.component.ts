@@ -7,6 +7,15 @@ import { RouteService, MasterRoute } from '../../core/services/route.service';
 import { decodePolyline, encodePolyline, LatLng, distanceToSegment, calculateDistance } from '../../core/utils/polyline.utils';
 
 type EditModeType = 'add' | 'select' | 'insert' | 'move';
+export type RoadType = 'urban' | 'suburban' | 'rural' | 'highway' | 'mixed';
+
+interface EditableRouteSegment {
+  segmentOrder: number;
+  from: LatLng;
+  to: LatLng;
+  distanceKm: number;
+  roadType: RoadType;
+}
 
 @Component({
   selector: 'app-route-editor',
@@ -27,6 +36,9 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Map Points
   points: LatLng[] = [];
+  segments: EditableRouteSegment[] = [];
+  selectedSegmentIndex: number | null = null;
+  readonly roadTypes: RoadType[] = ['urban', 'suburban', 'rural', 'highway', 'mixed'];
   highlightedPointIndex: number | null = null;
   selectedPoints: Set<number> = new Set();
   
@@ -39,6 +51,7 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private map: any = null;
   private markers: any[] = [];
   private polyline: any = null;
+  private segmentLayers: any[] = [];
   private midpointMarkers: any[] = [];
   private L: any = null;
 
@@ -97,6 +110,7 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Add map click handler
     this.map.on('click', (e: any) => this.handleMapClick(e));
+    this.updateMapDisplay();
   }
 
   private loadRoute(id: string): void {
@@ -113,6 +127,7 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         if (route.encoded_polyline) {
           try {
             this.points = decodePolyline(route.encoded_polyline);
+            this.rebuildSegments(route.segments);
             this.updateMapDisplay();
           } catch (e) {
             console.error('Error decoding polyline:', e);
@@ -143,6 +158,7 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private addPoint(lat: number, lng: number): void {
     this.points.push({ lat, lng });
+    this.rebuildSegments();
     this.updateMapDisplay();
     this.calculateTotalDistance();
   }
@@ -168,6 +184,7 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (insertIndex !== -1) {
       this.points.splice(insertIndex, 0, clickedPoint);
+      this.rebuildSegments();
       this.highlightedPointIndex = insertIndex;
       this.updateMapDisplay();
       this.calculateTotalDistance();
@@ -176,6 +193,8 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   deletePoint(index: number): void {
     this.points.splice(index, 1);
+    this.rebuildSegments();
+    this.selectedSegmentIndex = null;
     this.highlightedPointIndex = null;
     this.selectedPoints.delete(index);
     this.updateMapDisplay();
@@ -201,6 +220,8 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       this.points.splice(index, 1);
     });
 
+    this.rebuildSegments();
+    this.selectedSegmentIndex = null;
     this.selectedPoints.clear();
     this.highlightedPointIndex = null;
     this.updateMapDisplay();
@@ -211,6 +232,8 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!confirm('Are you sure you want to clear all points?')) return;
     
     this.points = [];
+    this.segments = [];
+    this.selectedSegmentIndex = null;
     this.highlightedPointIndex = null;
     this.selectedPoints.clear();
     this.updateMapDisplay();
@@ -236,14 +259,68 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.updateMapDisplay();
   }
 
+  selectSegment(index: number): void {
+    this.selectedSegmentIndex = index;
+    this.updateMapDisplay();
+  }
+
+  get selectedSegment(): EditableRouteSegment | null {
+    return this.selectedSegmentIndex === null
+      ? null
+      : this.segments[this.selectedSegmentIndex] || null;
+  }
+
+  setSelectedSegmentRoadType(roadType: RoadType): void {
+    if (this.selectedSegmentIndex === null || !this.segments[this.selectedSegmentIndex]) {
+      return;
+    }
+
+    this.segments[this.selectedSegmentIndex].roadType = roadType;
+    this.updateMapDisplay();
+  }
+
+  private rebuildSegments(existingSegments?: MasterRoute['segments']): void {
+    const previousTypes = existingSegments?.map(segment => segment.roadType)
+      || this.segments.map(segment => segment.roadType);
+    const defaultType: RoadType = 'mixed';
+
+    this.segments = this.points.slice(0, -1).map((from, index) => {
+      const to = this.points[index + 1];
+      return {
+        segmentOrder: index + 1,
+        from,
+        to,
+        distanceKm: calculateDistance(from, to),
+        roadType: previousTypes[index] || defaultType,
+      };
+    });
+
+    if (this.selectedSegmentIndex !== null && this.selectedSegmentIndex >= this.segments.length) {
+      this.selectedSegmentIndex = this.segments.length > 0 ? this.segments.length - 1 : null;
+    }
+  }
+
+  getRoadTypeColor(roadType: RoadType): string {
+    const colors: Record<RoadType, string> = {
+      urban: '#dc2626',
+      suburban: '#f59e0b',
+      rural: '#16a34a',
+      highway: '#2563eb',
+      mixed: '#7c3aed',
+    };
+    return colors[roadType];
+  }
+
   private updateMapDisplay(): void {
     if (!this.map || !this.L) return;
 
-    // Clear existing markers and polyline
+    // Clear existing markers and segment layers
     this.markers.forEach(m => m.remove());
     this.midpointMarkers.forEach(m => m.remove());
+    this.segmentLayers.forEach(layer => layer.remove());
     this.markers = [];
     this.midpointMarkers = [];
+    this.segmentLayers = [];
     
     if (this.polyline) {
       this.polyline.remove();
@@ -252,13 +329,25 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.points.length === 0) return;
 
-    // Draw polyline
     const latLngs: any[] = this.points.map(p => [p.lat, p.lng]);
-    this.polyline = this.L.polyline(latLngs, {
-      color: '#8B5CF6',
-      weight: 3,
-      opacity: 0.7
-    }).addTo(this.map);
+    this.segments.forEach((segment, index) => {
+      const layer = this.L.polyline(
+        [[segment.from.lat, segment.from.lng], [segment.to.lat, segment.to.lng]],
+        {
+          color: index === this.selectedSegmentIndex
+            ? '#111827'
+            : this.getRoadTypeColor(segment.roadType),
+          weight: index === this.selectedSegmentIndex ? 8 : 5,
+          opacity: 0.85,
+        }
+      ).addTo(this.map);
+
+      layer.on('click', (e: any) => {
+        this.L.DomEvent.stopPropagation(e);
+        this.selectSegment(index);
+      });
+      this.segmentLayers.push(layer);
+    });
 
     // Draw point markers
     this.points.forEach((point, index) => {
@@ -299,8 +388,9 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         this.map!.on('mousemove', (e: any) => {
           if (isDragging && this.draggingPointIndex === index) {
             this.points[index] = { lat: e.latlng.lat, lng: e.latlng.lng };
+            this.rebuildSegments();
             marker.setLatLng(e.latlng);
-            this.updatePolylineOnly();
+            this.updateSegmentLayersOnly();
           }
         });
 
@@ -342,13 +432,6 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  private updatePolylineOnly(): void {
-    if (!this.polyline) return;
-    
-    const latLngs: any[] = this.points.map(p => [p.lat, p.lng]);
-    this.polyline.setLatLngs(latLngs);
-  }
-
   private calculateTotalDistance(): void {
     if (this.points.length < 2) {
       this.totalDistance = '0';
@@ -361,6 +444,20 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.totalDistance = total.toFixed(2);
+  }
+
+  private updateSegmentLayersOnly(): void {
+    this.segments.forEach((segment, index) => {
+      const layer = this.segmentLayers[index];
+      if (!layer) {
+        return;
+      }
+
+      layer.setLatLngs([
+        [segment.from.lat, segment.from.lng],
+        [segment.to.lat, segment.to.lng],
+      ]);
+    });
   }
 
   saveRoute(): void {
@@ -378,7 +475,16 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       destination_city: this.destinationCity,
       total_distance_km: this.totalDistance,
       encoded_polyline: encodedPolyline,
-      is_active: this.isActive
+      is_active: this.isActive,
+      segments: this.segments.map(segment => ({
+        segmentOrder: segment.segmentOrder,
+        startLatitude: segment.from.lat,
+        startLongitude: segment.from.lng,
+        endLatitude: segment.to.lat,
+        endLongitude: segment.to.lng,
+        distanceKm: segment.distanceKm,
+        roadType: segment.roadType,
+      }))
     };
 
     const request = this.routeId
@@ -390,7 +496,8 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
           destination_city: routeData.destination_city,
           total_distance_km: routeData.total_distance_km,
           encoded_polyline: routeData.encoded_polyline,
-          is_active: routeData.is_active
+          is_active: routeData.is_active,
+          segments: routeData.segments,
         });
 
     request.subscribe({

@@ -1,6 +1,32 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
+import { RouteSegment } from '../utils/polyline.utils';
+
+export type { RouteSegment } from '../utils/polyline.utils';
+
+export type RoadType = 'urban' | 'suburban' | 'rural' | 'highway' | 'mixed';
+
+export interface RouteSegmentRequest {
+  segmentOrder: number;
+  startLatitude: number;
+  startLongitude: number;
+  endLatitude: number;
+  endLongitude: number;
+  distanceKm: number;
+  roadType: RoadType;
+}
+
+export interface RouteLounge {
+  id: string;
+  loungeName: string;
+  address?: string;
+  district?: string;
+  latitude?: number;
+  longitude?: number;
+  stopBeforeId?: string;
+  stopAfterId?: string;
+}
 
 export interface MasterRoute {
   id?: string;
@@ -14,16 +40,11 @@ export interface MasterRoute {
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
+  segments?: RouteSegment[];
 }
 
-export interface RouteSegment {
-  index: number;
-  from: { lat: number; lng: number };
-  to: { lat: number; lng: number };
-  distance: number;
-  bearing: number;
-  distanceFormatted: string;
-  bearingFormatted: string;
+export interface ActiveRouteDetails extends MasterRoute {
+  lounges: RouteLounge[];
 }
 
 export interface RouteCreateRequest {
@@ -35,6 +56,7 @@ export interface RouteCreateRequest {
   estimated_duration_minutes?: number;
   encoded_polyline: string | null;
   is_active: boolean;
+  segments: RouteSegmentRequest[];
 }
 
 @Injectable({
@@ -46,6 +68,10 @@ export class RouteService {
   // Get all routes
   getAllRoutes(): Observable<MasterRoute[]> {
     return this.apiService.get<MasterRoute[]>('/routes');
+  }
+
+  getActiveRoutesWithDetails(forceRefresh: boolean = false): Observable<ActiveRouteDetails[]> {
+    return this.apiService.get<ActiveRouteDetails[]>('/routes/active-with-details', { forceRefresh });
   }
 
   // Get single route by ID

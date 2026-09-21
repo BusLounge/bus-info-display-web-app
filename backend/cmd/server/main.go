@@ -46,7 +46,7 @@ func main() {
 
 	// Route Management
 	routeRepo := database.NewRouteRepository(db.DB)
-	routeService := services.NewRouteService(routeRepo)
+	routeService := services.NewRouteService(routeRepo, cfg.ETAProfiles)
 	routeHandler := handlers.NewRouteHandler(routeService)
 
 	// Broadcast Messaging
@@ -77,6 +77,9 @@ func main() {
 	dashboardRepo := database.NewDashboardRepository(db.DB)
 	dashboardService := services.NewDashboardService(dashboardRepo)
 	dashboardHandler := handlers.NewDashboardHandler(dashboardService)
+
+	// ETA Management
+	etaHandler := handlers.NewETAHandler(db.DB)
 
 	router := mux.NewRouter()
 
@@ -126,6 +129,7 @@ func main() {
 
 	// Route Management routes
 	api.HandleFunc("/routes", routeHandler.GetAllRoutes).Methods("GET", "OPTIONS")
+	api.HandleFunc("/routes/active-with-details", routeHandler.GetActiveRoutesWithDetails).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/routes", routeHandler.CreateRoute).Methods("POST", "OPTIONS")
 	api.HandleFunc("/routes/{id}", routeHandler.GetRouteByID).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/routes/{id}", routeHandler.UpdateRoute).Methods("PUT", "OPTIONS")
@@ -148,6 +152,9 @@ func main() {
 
 	// Dashboard route
 	api.HandleFunc("/dashboard", dashboardHandler.GetDashboardData).Methods("GET", "OPTIONS")
+
+	// ETA routes
+	etaHandler.RegisterRoutes(router)
 
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
