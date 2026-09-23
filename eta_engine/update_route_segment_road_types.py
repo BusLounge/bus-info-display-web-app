@@ -22,25 +22,48 @@ DEFAULT_BATCH_SIZE = 50
 DEFAULT_REQUEST_DELAY = 1.1
 DEFAULT_HTTP_TIMEOUT = 30
 
-# These are the road_type values accepted by route_segments.road_type.
-OSM_TO_APP_ROAD_TYPE = {
-    "motorway": "highway",
-    "motorway_link": "highway",
-    "trunk": "highway",
-    "trunk_link": "highway",
-    "primary": "highway",
-    "primary_link": "highway",
-    "secondary": "suburban",
-    "secondary_link": "suburban",
-    "tertiary": "suburban",
-    "tertiary_link": "suburban",
-    "residential": "urban",
-    "living_street": "urban",
-    "service": "urban",
-    "pedestrian": "urban",
-    "unclassified": "rural",
-    "track": "rural",
-    "road": "mixed",
+# These uppercase functional classes require the route_segments.road_type
+# constraint to be updated before database writes are enabled.
+LEGACY_OSM_TO_APP_ROAD_TYPE = {
+    "motorway": "HIGHWAY",
+    "motorway_link": "HIGHWAY",
+    "trunk": "EXPRESSWAY",
+    "trunk_link": "EXPRESSWAY",
+    "primary": "ARTERIAL",
+    "primary_link": "ARTERIAL",
+    "secondary": "ARTERIAL",
+    "secondary_link": "ARTERIAL",
+    "tertiary": "COLLECTOR",
+    "tertiary_link": "COLLECTOR",
+    "residential": "URBAN",
+    "living_street": "LOCAL",
+    "pedestrian": "LOCAL",
+    "service": "SERVICE",
+    "unclassified": "RURAL",
+    "track": "RURAL",
+    "road": "LOCAL",
+}
+
+# These functional classes are for dry-run analysis until the database
+# constraint and downstream ETA profiles are updated.
+DETAILED_OSM_TO_APP_ROAD_TYPE = {
+    "motorway": "HIGHWAY",
+    "motorway_link": "HIGHWAY",
+    "trunk": "EXPRESSWAY",
+    "trunk_link": "EXPRESSWAY",
+    "primary": "ARTERIAL",
+    "primary_link": "ARTERIAL",
+    "secondary": "ARTERIAL",
+    "secondary_link": "ARTERIAL",
+    "tertiary": "COLLECTOR",
+    "tertiary_link": "COLLECTOR",
+    "residential": "URBAN",
+    "living_street": "LOCAL",
+    "pedestrian": "LOCAL",
+    "service": "SERVICE",
+    "unclassified": "RURAL",
+    "track": "RURAL",
+    "road": "LOCAL",
 }
 
 logger = logging.getLogger("update_route_segment_road_types")
@@ -83,6 +106,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Query and print proposed changes without updating PostgreSQL.",
     )
+    parser.add_argument(
+        "--detailed-road-types",
+        action="store_true",
+        help="Use detailed OSM-derived functional classes.",
+    )
     args = parser.parse_args()
     if not args.database_url:
         parser.error("DATABASE_URL or --database-url is required")
@@ -102,14 +130,19 @@ def validate_coordinate(latitude: Any, longitude: Any) -> bool:
     )
 
 
-def map_osm_road_types(tags: list[str]) -> str | None:
-    mapped = [OSM_TO_APP_ROAD_TYPE[tag] for tag in tags if tag in OSM_TO_APP_ROAD_TYPE]
+def map_osm_road_types(
+    tags: list[str], *, detailed: bool = False
+) -> str | None:
+    mapping = DETAILED_OSM_TO_APP_ROAD_TYPE if detailed else LEGACY_OSM_TO_APP_ROAD_TYPE
+    mapped = [mapping[tag] for tag in tags if tag in mapping]
     if not mapped:
         return None
 
     counts = Counter(mapped)
     if len(counts) == 1:
         return mapped[0]
+    if detailed:
+        return counts.most_common(1)[0][0]
     if "highway" in counts and counts["highway"] >= max(counts.values()):
         return "highway"
     return "mixed"
@@ -124,6 +157,8 @@ def query_overpass(
     end_longitude: float,
     radius_meters: int,
     timeout: int,
+    *,
+    detailed: bool = False,
 ) -> str | None:
     query = f"""
 [out:json][timeout:20];
@@ -147,7 +182,7 @@ out tags;
         for element in elements
         if element.get("tags", {}).get("highway")
     ]
-    return map_osm_road_types(osm_tags)
+    return map_osm_road_types(osm_tags, detailed=detailed)
 
 
 def fetch_null_segments(connection: Any) -> pd.DataFrame:
@@ -220,6 +255,7 @@ def main() -> int:
                         float(row.end_longitude),
                         args.radius_meters,
                         DEFAULT_HTTP_TIMEOUT,
+                        detailed=args.detailed_road_types,
                     )
                     if road_type is None:
                         logger.warning("No mapped highway found for %s", row.id)
