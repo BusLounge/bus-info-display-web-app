@@ -56,7 +56,8 @@ type UpdateRouteRequest struct {
 }
 
 var validRoadTypes = map[string]bool{
-	"urban": true, "suburban": true, "rural": true, "highway": true, "mixed": true,
+	"HIGHWAY": true, "EXPRESSWAY": true, "ARTERIAL": true, "COLLECTOR": true,
+	"URBAN": true, "RURAL": true, "LOCAL": true, "SERVICE": true,
 }
 
 func (s *RouteService) buildSegments(routeID string, requests []RouteSegmentRequest) ([]models.RouteSegment, error) {

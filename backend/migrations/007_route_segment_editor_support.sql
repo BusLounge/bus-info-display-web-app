@@ -5,7 +5,10 @@ ALTER TABLE public.route_segments
 
 ALTER TABLE public.route_segments
   ADD CONSTRAINT route_segments_road_type_check
-  CHECK (road_type IN ('urban', 'suburban', 'rural', 'highway', 'mixed'));
+  CHECK (road_type IN (
+    'HIGHWAY', 'EXPRESSWAY', 'ARTERIAL', 'COLLECTOR',
+    'URBAN', 'RURAL', 'LOCAL', 'SERVICE'
+  ));
 
 ALTER TABLE public.route_segments
   ALTER COLUMN start_point_id DROP NOT NULL,

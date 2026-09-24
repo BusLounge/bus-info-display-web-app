@@ -1,9 +1,12 @@
 {
   "eta_profiles": {
-    "urban": 1.0,
-    "suburban": 1.5,
-    "rural": 2.0,
-    "highway": 0.8,
-    "mixed": 1.2
+    "HIGHWAY": 0.8,
+    "EXPRESSWAY": 0.85,
+    "ARTERIAL": 1.1,
+    "COLLECTOR": 1.3,
+    "URBAN": 1.0,
+    "RURAL": 2.0,
+    "LOCAL": 1.5,
+    "SERVICE": 1.7
   }
 }

@@ -21,32 +21,12 @@ DEFAULT_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 DEFAULT_BATCH_SIZE = 50
 DEFAULT_REQUEST_DELAY = 1.1
 DEFAULT_HTTP_TIMEOUT = 30
+DEFAULT_OVERPASS_RETRIES = 4
+DEFAULT_OVERPASS_BACKOFF = 2.0
+MAX_OVERPASS_BACKOFF = 30.0
 
-# These uppercase functional classes require the route_segments.road_type
-# constraint to be updated before database writes are enabled.
-LEGACY_OSM_TO_APP_ROAD_TYPE = {
-    "motorway": "HIGHWAY",
-    "motorway_link": "HIGHWAY",
-    "trunk": "EXPRESSWAY",
-    "trunk_link": "EXPRESSWAY",
-    "primary": "ARTERIAL",
-    "primary_link": "ARTERIAL",
-    "secondary": "ARTERIAL",
-    "secondary_link": "ARTERIAL",
-    "tertiary": "COLLECTOR",
-    "tertiary_link": "COLLECTOR",
-    "residential": "URBAN",
-    "living_street": "LOCAL",
-    "pedestrian": "LOCAL",
-    "service": "SERVICE",
-    "unclassified": "RURAL",
-    "track": "RURAL",
-    "road": "LOCAL",
-}
-
-# These functional classes are for dry-run analysis until the database
-# constraint and downstream ETA profiles are updated.
-DETAILED_OSM_TO_APP_ROAD_TYPE = {
+# OSM highway tags are normalized to the eight application road types.
+OSM_TO_APP_ROAD_TYPE = {
     "motorway": "HIGHWAY",
     "motorway_link": "HIGHWAY",
     "trunk": "EXPRESSWAY",
@@ -133,19 +113,13 @@ def validate_coordinate(latitude: Any, longitude: Any) -> bool:
 def map_osm_road_types(
     tags: list[str], *, detailed: bool = False
 ) -> str | None:
-    mapping = DETAILED_OSM_TO_APP_ROAD_TYPE if detailed else LEGACY_OSM_TO_APP_ROAD_TYPE
-    mapped = [mapping[tag] for tag in tags if tag in mapping]
+    del detailed  # Retained for CLI compatibility; all output uses the eight types.
+    mapped = [OSM_TO_APP_ROAD_TYPE[tag] for tag in tags if tag in OSM_TO_APP_ROAD_TYPE]
     if not mapped:
         return None
 
     counts = Counter(mapped)
-    if len(counts) == 1:
-        return mapped[0]
-    if detailed:
-        return counts.most_common(1)[0][0]
-    if "highway" in counts and counts["highway"] >= max(counts.values()):
-        return "highway"
-    return "mixed"
+    return counts.most_common(1)[0][0]
 
 
 def query_overpass(
@@ -168,13 +142,43 @@ def query_overpass(
 );
 out tags;
 """
-    response = session.post(
-        endpoint,
-        data={"data": query},
-        headers={"User-Agent": "bus-info-display-road-type-updater/1.0"},
-        timeout=timeout,
-    )
-    response.raise_for_status()
+    for attempt in range(DEFAULT_OVERPASS_RETRIES + 1):
+        try:
+            response = session.post(
+                endpoint,
+                data={"data": query},
+                headers={"User-Agent": "bus-info-display-road-type-updater/1.0"},
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            break
+        except requests.HTTPError as error:
+            status_code = error.response.status_code if error.response is not None else None
+            retryable = status_code == 429 or status_code is not None and 500 <= status_code < 600
+            if not retryable or attempt >= DEFAULT_OVERPASS_RETRIES:
+                raise
+            backoff = min(DEFAULT_OVERPASS_BACKOFF * (2**attempt), MAX_OVERPASS_BACKOFF)
+            logger.warning(
+                "Overpass returned HTTP %s; retrying in %.1f seconds (attempt %d/%d)",
+                status_code,
+                backoff,
+                attempt + 1,
+                DEFAULT_OVERPASS_RETRIES,
+            )
+            time.sleep(backoff)
+        except requests.RequestException as error:
+            if attempt >= DEFAULT_OVERPASS_RETRIES:
+                raise
+            backoff = min(DEFAULT_OVERPASS_BACKOFF * (2**attempt), MAX_OVERPASS_BACKOFF)
+            logger.warning(
+                "Overpass request error (%s); retrying in %.1f seconds (attempt %d/%d)",
+                error,
+                backoff,
+                attempt + 1,
+                DEFAULT_OVERPASS_RETRIES,
+            )
+            time.sleep(backoff)
+
     payload = response.json()
     elements = payload.get("elements", [])
     osm_tags = [
@@ -202,11 +206,11 @@ def update_road_types(connection: Any, updates: list[tuple[str, str]]) -> None:
         execute_values(
             cursor,
             """
-            UPDATE route_segments AS rs
-            SET road_type = values.road_type, updated_at = NOW()
-                        FROM (VALUES %s) AS incoming(id, road_type)
-                        WHERE rs.id = incoming.id::uuid
-                            AND rs.road_type IS NULL
+            UPDATE public.route_segments AS rs
+            SET road_type = incoming.road_type, updated_at = NOW()
+            FROM (VALUES %s) AS incoming(id, road_type)
+            WHERE rs.id = incoming.id::uuid
+                AND rs.road_type IS NULL
             """,
             updates,
             template="(%s::uuid, %s)",
@@ -219,6 +223,7 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
     connection = psycopg2.connect(args.database_url)
+    connection.autocommit = False
     session = requests.Session()
     processed = 0
     updated = 0
@@ -296,6 +301,9 @@ def main() -> int:
             " (dry run)" if args.dry_run else "",
         )
         return 0
+    except BaseException:
+        connection.rollback()
+        raise
     finally:
         session.close()
         connection.close()

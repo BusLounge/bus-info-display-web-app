@@ -147,7 +147,7 @@ interface LocalAgentStatus {
   standalone: true,
   imports: [CommonModule],
   templateUrl: './bids-display.component.html',
-  styleUrl: './bids-display.component.scss'
+  styleUrls: ['./bids-display.component.scss']
 })
 export class BidsDisplayComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);

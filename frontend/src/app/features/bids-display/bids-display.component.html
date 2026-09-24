@@ -1,6 +1,9 @@
 <div class="bids-display" [style.zoom]="displayScale" [class.connection-lost]="!isInternetConnected">
   <div class="header" *ngIf="!isHybridAlternateAdDisplay">
-    <div class="header-title">{{ loungeName.toUpperCase() }}</div>
+    <div class="header-brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div class="header-title">{{ loungeName.toUpperCase() }}</div>
+    </div>
     <div class="header-time">
       <div class="date">{{ currentDate }}</div>
       <div class="time">{{ currentTime }}</div>
@@ -32,7 +35,7 @@
     <ng-container *ngIf="currentDisplayMode === 'both' && currentLayoutMode === 'split'">
       <div class="split-container" [class.vertical]="currentDisplayOrientation === 'portrait'">
         <!-- Left Side: Schedules -->
-        <div class="split-left">
+        <div class="split-left glass-panel">
           <div class="schedule-column">
             <div *ngIf="loading" class="section-header">{{ t('loadingLiveSchedule') }}</div>
             <div *ngIf="error" class="section-header">{{ error }}</div>
@@ -110,7 +113,7 @@
         </div>
 
         <!-- Right Side: Looping Ads -->
-        <div class="split-right">
+        <div class="split-right glass-panel">
           <div class="split-ad-container" *ngIf="currentSplitAd">
             <img *ngIf="currentSplitAd.mediaType === 'image'" [src]="currentSplitAd.mediaUrl" [alt]="currentSplitAd.name" />
             <video *ngIf="currentSplitAd.mediaType === 'video'" [src]="currentSplitAd.mediaUrl" autoplay muted loop playsinline (error)="onAdVideoError(currentSplitAd)"></video>

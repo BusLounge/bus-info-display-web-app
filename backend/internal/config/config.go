@@ -62,7 +62,16 @@ func loadJSONConfig() jsonConfig {
 		log.Fatalf("Failed to parse JSON config %s: %v", configPath, err)
 	}
 
-	requiredProfiles := []string{"urban", "suburban", "rural", "highway", "mixed"}
+	requiredProfiles := []string{
+		"HIGHWAY",
+		"EXPRESSWAY",
+		"ARTERIAL",
+		"COLLECTOR",
+		"URBAN",
+		"RURAL",
+		"LOCAL",
+		"SERVICE",
+	}
 	for _, profile := range requiredProfiles {
 		multiplier, exists := fileConfig.ETAProfiles[profile]
 		if !exists || multiplier <= 0 {
