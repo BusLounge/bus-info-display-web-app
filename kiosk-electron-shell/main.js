@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { spawn, exec } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const api = require('./api');
 const express = require('express');
 
@@ -9,10 +9,15 @@ let expressApp;
 let expressServer;
 const EXPRESS_PORT = 4200;
 
+function getAppResourcePath(...segments) {
+  const resourceRoot = app.isPackaged ? process.resourcesPath : __dirname;
+  return path.join(resourceRoot, ...segments);
+}
+
 function startExpressServer() {
     expressApp = express();
     // Serve static files from 'www' (our packaged Angular app)
-    const wwwPath = path.join(__dirname, 'www');
+  const wwwPath = getAppResourcePath('www');
     expressApp.use(express.static(wwwPath));
 
     // Handle SPA routing by redirecting all other requests to index.html
@@ -26,9 +31,20 @@ function startExpressServer() {
 }
 
 function stopExpressServer() {
-    if (expressServer) {
-        expressServer.close();
-    }
+  if (!expressServer) return Promise.resolve();
+
+  const server = expressServer;
+  expressServer = null;
+  return new Promise((resolve) => {
+    server.close((error) => {
+      if (error) {
+        console.error('Failed to stop local Express server:', error);
+      } else {
+        console.log('Local Express server stopped.');
+      }
+      resolve();
+    });
+  });
 }
 
 let mainWindow;
@@ -37,6 +53,7 @@ let loginWindow;
 let deviceId;
 let pollingInterval;
 let goProcess;
+let isQuitting = false;
 
 const DISPLAY_RESOLUTION_PRESETS = {
   '1280x720': { width: 1280, height: 720 },
@@ -74,42 +91,80 @@ function getConfigPath() {
 
 
 function stopGoProcess() {
-    return new Promise((resolve) => {
-        if (!goProcess || goProcess.killed) {
-            return resolve();
-        }
+  const child = goProcess;
+  if (!child) return Promise.resolve();
 
-        console.log(`Stopping Go backend process with PID: ${goProcess.pid}...`);
-        
-        if (process.platform === "win32") {
-            exec(`taskkill /PID ${goProcess.pid} /T /F`, (err, stdout, stderr) => {
-                if (err) {
-                    console.error(`Failed to kill process on Windows: ${err}`);
-                }
-                console.log('Go backend process stopped on Windows.');
-                goProcess = null;
-                // Add a small delay for the OS to release the port
-                setTimeout(resolve, 1000);
-            });
-        } else {
-            // For macOS and Linux
-            goProcess.kill('SIGINT');
-            goProcess.on('close', () => {
-                console.log('Go backend process stopped.');
-                goProcess = null;
-                setTimeout(resolve, 1000);
-            });
+  console.log(`Stopping Go backend process with PID: ${child.pid || 'unknown'}...`);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let killTimer;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(killTimer);
+      if (goProcess === child) goProcess = null;
+      console.log('Go backend process stopped.');
+      resolve();
+    };
+
+    const forceKill = () => {
+      if (child.exitCode !== null || child.signalCode !== null) {
+        finish();
+        return;
+      }
+
+      console.warn('Go backend did not stop in time; forcing termination.');
+      try {
+        child.kill('SIGKILL');
+      } catch (error) {
+        console.error('Failed to force-stop Go backend:', error);
+        finish();
+        return;
+      }
+      killTimer = setTimeout(finish, 3000);
+    };
+
+    child.once('close', finish);
+    if (child.exitCode !== null || child.signalCode !== null) {
+      finish();
+      return;
+    }
+
+    if (process.platform === 'win32' && child.pid) {
+      execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], (error) => {
+        if (settled) return;
+        if (error) {
+          console.error('Windows taskkill failed; trying child-process termination:', error);
         }
-    });
+        killTimer = setTimeout(forceKill, 3000);
+      });
+    } else {
+      try {
+        child.kill('SIGTERM');
+      } catch (error) {
+        console.error('Failed to signal Go backend:', error);
+      }
+      killTimer = setTimeout(forceKill, 5000);
+    }
+  });
 }
 
 
 function startGoProcess() {
-    const isPackaged = app.isPackaged;
-    
-    if (isPackaged || fs.existsSync(path.join(__dirname, 'bin', 'agent.exe'))) {
-        // Run the bundled executable
-        const agentExe = path.join(__dirname, 'bin', 'agent.exe');
+  if (goProcess && goProcess.exitCode === null && goProcess.signalCode === null) {
+    console.log(`Go backend is already running with PID: ${goProcess.pid || 'unknown'}.`);
+    return;
+  }
+
+  const agentExe = getAppResourcePath('bin', 'agent.exe');
+  if (app.isPackaged || fs.existsSync(agentExe)) {
+    if (!fs.existsSync(agentExe)) {
+      console.error(`Bundled Go backend executable was not found: ${agentExe}`);
+      return;
+    }
+
         const userDataPath = app.getPath('userData');
         const configPath = getConfigPath();
         
@@ -134,23 +189,42 @@ function startGoProcess() {
             fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
         }
         
-        goProcess = spawn(agentExe, ['-config', configPath], { cwd: userDataPath });
+        try {
+          goProcess = spawn(agentExe, ['-config', configPath], { cwd: userDataPath });
+        } catch (error) {
+          console.error('Failed to start bundled Go backend:', error);
+          goProcess = null;
+          return;
+        }
     } else {
         // Fallback to go run for development
         const agentPath = path.join(__dirname, '..', 'tv-sync-agent-go');
         const configPath = getConfigPath();
         console.log('Starting Go backend process (dev mode)...');
-        goProcess = exec(`go run cmd/agent/main.go -config "${configPath}"`, { cwd: agentPath });
+        try {
+          goProcess = spawn('go', ['run', 'cmd/agent/main.go', '-config', configPath], { cwd: agentPath });
+        } catch (error) {
+          console.error('Failed to start Go backend in development mode:', error);
+          goProcess = null;
+          return;
+        }
     }
 
-    if (goProcess.stdout) goProcess.stdout.on('data', (data) => console.log(`Go Backend: ${data.toString()}`));
-    if (goProcess.stderr) goProcess.stderr.on('data', (data) => console.error(`Go Backend Error: ${data.toString()}`));
+    const child = goProcess;
+    if (child.stdout) child.stdout.on('data', (data) => console.log(`Go Backend: ${data.toString()}`));
+    if (child.stderr) child.stderr.on('data', (data) => console.error(`Go Backend Error: ${data.toString()}`));
+
+    child.on('error', (error) => {
+        console.error('Go backend process could not be started:', error);
+    });
     
-    goProcess.on('close', (code) => {
+    child.on('close', (code) => {
         if (code !== 0 && code !== null) {
             console.error(`Go backend process exited with code ${code}`);
+        } else {
+          console.log(`Go backend process exited with code ${code}.`);
         }
-        goProcess = null;
+        if (goProcess === child) goProcess = null;
     });
 }
 
@@ -167,7 +241,7 @@ function createMainWindow() {
     }
   });
 
-  const angularIndexPath = path.join(__dirname, 'www', 'index.html');
+  const angularIndexPath = getAppResourcePath('www', 'index.html');
 
   if (fs.existsSync(angularIndexPath)) {
     mainWindow.loadURL('http://localhost:4200/bids-display');
@@ -221,9 +295,10 @@ function createLoginWindow() {
 
 app.on('ready', () => {
     // We start the express server when app is ready
-    if (fs.existsSync(path.join(__dirname, 'www'))) {
+  if (fs.existsSync(getAppResourcePath('www'))) {
         startExpressServer();
     }
+  startGoProcess();
     createMainWindow();
 });
 app.on('window-all-closed', function () {
@@ -232,9 +307,15 @@ app.on('window-all-closed', function () {
   }
 });
 
-app.on('will-quit', () => {
-    stopGoProcess();
-    stopExpressServer();
+app.on('before-quit', (event) => {
+  if (isQuitting) return;
+
+  event.preventDefault();
+  isQuitting = true;
+
+  Promise.all([stopGoProcess(), stopExpressServer()])
+    .catch((error) => console.error('Error during application shutdown:', error))
+    .finally(() => app.quit());
 });
 
 app.on('activate', function () {

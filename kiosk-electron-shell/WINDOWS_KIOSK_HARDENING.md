@@ -57,3 +57,74 @@ Use the matching policy names available in the target Windows edition and ADMX t
 For a production kiosk, use Windows **Assigned Access** for supported single-app or restricted-app experiences, or **Shell Launcher** where a desktop application must replace the shell. These are more appropriate than trying to disable Explorer with a registry edit. Validate Windows edition support, app recovery, updates, accessibility, maintenance access, and physical recovery before deployment. Keep the kiosk account non-administrative and use AppLocker or Windows Defender Application Control where appropriate to restrict alternate executables.
 
 Do not replace `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Shell` or `Userinit` as a shortcut. Incorrect values can prevent normal logon; shell replacement should be managed through Shell Launcher or an equivalent supported deployment mechanism.
+
+### Shell Launcher provisioning template
+
+The project includes [provision-shell-launcher.ps1](provision-shell-launcher.ps1) as a per-account Shell Launcher template for the packaged desktop Electron app. It requires an elevated Windows PowerShell session and a Windows edition with the `Client-EmbeddedShellLauncher` optional feature. Review the script and test it on a non-production device before using it on a fleet.
+
+1. Install the signed/approved Electron application at its final stable path. Create a dedicated standard kiosk account and verify that a separate administrator account can sign in normally.
+2. If Shell Launcher is not enabled, run Apply once to enable the Windows optional feature, restart, then rerun Apply. Example:
+
+    ```powershell
+    .\provision-shell-launcher.ps1 -Mode Apply `
+       -KioskAccount "$env:COMPUTERNAME\KioskUser" `
+       -AppPath 'C:\Program Files\Bus Info Display\Bus Info Display.exe'
+    ```
+
+    The template records the prior default and per-user shell settings in `%ProgramData%\BusInfoDisplay\ShellLauncher\<SID>.json`, sets Explorer as the default for unassigned users, assigns the Electron executable to the kiosk SID, and enables Shell Launcher. The default exit action is `0` (restart the kiosk shell); values `1`, `2`, and `3` mean restart device, shut down, and do nothing. `-WhatIf` previews the shell assignment operation.
+3. Sign out/in or restart. Verify the kiosk account launches the app, the administrator still receives Explorer, and the documented recovery login works. Shell Launcher setup does not install the app or configure Assigned Access.
+4. To restore the saved shell configuration for that account, run:
+
+    ```powershell
+    .\provision-shell-launcher.ps1 -Mode Revert `
+       -KioskAccount "$env:COMPUTERNAME\KioskUser"
+    ```
+
+    Revert restores the saved account assignment, default shell, and enabled state. It deliberately leaves the optional Windows feature installed; remove that feature separately only after confirming no other account or management policy uses it.
+
+The template configures shell selection and exit behavior only. It does not block `Alt+Tab`, `Alt+F4`, the Windows key, or `Ctrl+Alt+Del`. Use edition-supported Keyboard Filter/MDM or Group Policy for approved shortcut restrictions, scope them to the kiosk account, and test each chord on the target Windows image. Do not claim or configure an application-level replacement for Windows secure attention; preserve an administrator recovery path.
+
+### Disable only unnecessary functions
+
+Do not apply a generic “debloat” or service-disabling script to an industrial kiosk. Inventory actual device needs and disable features using supported policy/MDM, one change at a time. Candidates may include AutoPlay/AutoRun, consumer experiences, unused user accounts, removable-storage access, and remote access services **only when not used for administration**. Retain Windows Defender/endpoint protection, Firewall, Windows Update, event logging, accessibility required by operators, and the management/recovery channel. Validate application dependencies and rollback after every policy change.
+
+### Firmware and physical checklist
+
+- Set a unique BIOS/UEFI setup password and store it in the approved credential vault.
+- Restrict boot order to the internal system drive; disable USB, optical-media, PXE/network, and one-time external boot where supported and not required for service. Enable Secure Boot and TPM where supported; escrow and test BitLocker recovery before enabling it.
+- Lock the enclosure and control unused physical ports where practical. Firmware controls are vendor-specific and do not prevent every physical attack; document vendor recovery procedures.
+- Before deployment, test power-on, app crash/restart, update/reboot, keyboard escape chords, admin sign-in, firmware boot restrictions, and full rollback on the actual hardware. `Ctrl+Alt+Del` is a Windows secure-attention path: verify the intended supported policy behavior, do not promise that Shell Launcher or Electron blocks it.
+
+## Electron and Go startup
+
+The Windows kiosk runtime is started by [main.js](main.js), separately from Windows shell provisioning:
+
+- `npm run dist` runs [build.js](build.js). It builds the Go agent as `bin\agent.exe`, builds Angular into `www`, then packages the Electron app with electron-builder.
+- The electron-builder configuration in [package.json](package.json) copies `bin` and `www` into the packaged application's resources directory. In packaged mode, `main.js` resolves these from `process.resourcesPath`; during development, it resolves them relative to the Electron project directory (`__dirname`). Keep these source and destination folder names aligned. Missing or misplaced assets can prevent the Go process or display page from starting after installation.
+- During Electron's `ready` lifecycle, the app starts its local Express server when `www` exists, starts the Go agent, and then creates the kiosk window. Packaged mode starts the bundled `process.resourcesPath\bin\agent.exe`. Development mode starts a local `bin\agent.exe` if present, otherwise it runs the Go source with `go run`.
+- Packaged configuration is stored under Electron's per-user `app.getPath('userData')`, not beside the installed executable. Ensure the kiosk account can write to its user-data and local-store directories.
+- On Electron `before-quit`, the app waits for the Go child process/tree and the Express server to stop. Windows uses `taskkill` with a termination fallback; the app logs backend startup errors and exits.
+
+The current startup launches the Go process before creating the kiosk window, but does not wait for an explicit Go health check before rendering the page. Include cold-boot timing and backend readiness in target-device acceptance tests. `npm run dist` packages the application; it does not install the app, configure Windows sign-in, or enable Shell Launcher.
+
+### Local admin access
+
+While the Electron kiosk app is running, press **Ctrl+Shift+A** to open the local admin login window. This is wired for both development and the packaged Angular display: the Angular root captures the shortcut and calls the limited `openAdmin()` API exposed by [preload.js](preload.js), which sends an IPC message to [main.js](main.js). Electron main then creates the local login window; the fallback page [index.html](index.html) also handles the chord when the Angular assets are unavailable.
+
+After successful login, the local admin form in [admin.html](admin.html) can update the lounge identity, display mode/layout, language, sync frequency, resolution, and orientation for this kiosk. Maintenance personnel can use it directly on the thin client without opening the centralized Angular management pages.
+
+The preload bridge keeps renderer code from receiving Electron's unrestricted `ipcRenderer`, but that only describes the IPC boundary; it does not make the current login secure. The login check in `main.js` currently uses hard-coded `admin` / `password` credentials. Replace this with production-grade authentication and authorization before deployment, and do not treat the shortcut or login window as a substitute for Windows kiosk account restrictions.
+
+## Target-device boot and provisioning flow
+
+Use this sequence on each industrial thin client. Prefer centrally managed provisioning (such as your organization's MDM/GPO process) for repeatable fleet deployment. There is currently no Shell Launcher provisioning script in this project; the registry hardening script above only applies per-user Explorer/Task Manager policies.
+
+1. Confirm the target Windows edition supports Shell Launcher and determine the device CPU architecture. Build and test the app for that OS/architecture, then install the packaged application to a stable path. The current NSIS target does not configure a Shell Launcher assignment; point Windows to the installed product executable, not `node_modules\electron\electron.exe` or a development folder.
+2. Create a dedicated standard kiosk account and a separate administrator account. Confirm the administrator account can sign in and receives the normal Explorer shell before changing kiosk provisioning.
+3. Using Shell Launcher or a supported device-management workflow, assign the installed Electron executable to the kiosk account's SID. Keep `explorer.exe` as the default shell for unassigned accounts, including the maintenance administrator. Do not directly overwrite Winlogon `Shell` or `Userinit` values.
+4. Configure the kiosk account's restrictions and application control according to the earlier sections. Apply per-user settings in that account's context, and retain a tested administrator/recovery route.
+5. Reboot for an end-to-end test. Expected sequence: Windows signs in to the kiosk account; Shell Launcher starts the installed Electron app; Electron resolves packaged `bin`/`www` from `process.resourcesPath`; the Go agent and local Express server start; then the kiosk display window opens.
+6. Test normal exit, crash, power loss, network loss, and update/reboot. Configure Shell Launcher’s exit action for the desired behavior. A restart-shell action relaunches the app after it exits; Electron first performs its process/server cleanup, but that exit action does not open Explorer for the kiosk user. For maintenance, sign out and use the separate administrator account, or use the documented management/recovery procedure.
+7. Document rollback before rollout: use the administrator or management plane to remove the kiosk user's custom shell assignment or disable Shell Launcher, then reboot and verify the default Explorer shell. Keep installation media and recovery credentials controlled by the device administrator.
+
+Before production deployment, test the packaged installer at its final install path and verify that `resources\bin\agent.exe`, `resources\www`, the writable user-data directory, and the local-store directory all exist and work under the standard kiosk account. Also replace the hard-coded admin credentials in the application before treating the kiosk as secured.

@@ -24,6 +24,19 @@ export class App implements OnDestroy {
   hideGlobalLoaderForCurrentRoute: boolean = false;
   private navigationSubscription: Subscription;
   private readonly onWindowResize = () => this.syncHeaderOffset();
+  private readonly onDocumentKeydown = (event: KeyboardEvent) => {
+    if (!event.ctrlKey || !event.shiftKey || event.altKey || event.metaKey || event.key.toLowerCase() !== 'a') {
+      return;
+    }
+
+    const electronBridge = (window as Window & { electron?: { openAdmin?: () => void } }).electron;
+    if (!electronBridge?.openAdmin) {
+      return;
+    }
+
+    event.preventDefault();
+    electronBridge.openAdmin();
+  };
 
   constructor(
     private router: Router,
@@ -34,6 +47,7 @@ export class App implements OnDestroy {
 
     if (isPlatformBrowser(this.platformId)) {
       window.addEventListener('resize', this.onWindowResize);
+      document.addEventListener('keydown', this.onDocumentKeydown);
       this.syncHeaderOffset();
     }
 
@@ -64,6 +78,7 @@ export class App implements OnDestroy {
   ngOnDestroy(): void {
     if (isPlatformBrowser(this.platformId)) {
       window.removeEventListener('resize', this.onWindowResize);
+      document.removeEventListener('keydown', this.onDocumentKeydown);
     }
 
     this.navigationSubscription.unsubscribe();
