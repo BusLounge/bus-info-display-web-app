@@ -18,8 +18,8 @@ from dotenv import load_dotenv
 from psycopg2.extras import execute_values
 
 DEFAULT_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-DEFAULT_BATCH_SIZE = 50
-DEFAULT_REQUEST_DELAY = 1.1
+DEFAULT_BATCH_SIZE = 20
+DEFAULT_REQUEST_DELAY = 2.5
 DEFAULT_HTTP_TIMEOUT = 30
 DEFAULT_OVERPASS_RETRIES = 4
 DEFAULT_OVERPASS_BACKOFF = 2.0
@@ -78,7 +78,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--radius-meters",
         type=int,
-        default=100,
+        default=20,
         help="Search radius around each endpoint (default: 100).",
     )
     parser.add_argument(
