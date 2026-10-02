@@ -5,7 +5,16 @@ import { RouteSegment } from '../utils/polyline.utils';
 
 export type { RouteSegment } from '../utils/polyline.utils';
 
-export type RoadType = 'urban' | 'suburban' | 'rural' | 'highway' | 'mixed';
+export type RoadType =
+  | 'HIGHWAY'
+  | 'EXPRESSWAY'
+  | 'ARTERIAL'
+  | 'COLLECTOR'
+  | 'URBAN'
+  | 'RURAL'
+  | 'LOCAL'
+  | 'SERVICE'
+  | 'UNKNOWN';
 
 export interface RouteSegmentRequest {
   segmentOrder: number;

@@ -71,6 +71,7 @@ func loadJSONConfig() jsonConfig {
 		"RURAL",
 		"LOCAL",
 		"SERVICE",
+		"UNKNOWN",
 	}
 	for _, profile := range requiredProfiles {
 		multiplier, exists := fileConfig.ETAProfiles[profile]

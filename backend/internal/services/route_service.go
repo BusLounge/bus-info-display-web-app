@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	"bus-schedule-lounge/internal/database"
 	"bus-schedule-lounge/internal/models"
@@ -58,6 +59,26 @@ type UpdateRouteRequest struct {
 var validRoadTypes = map[string]bool{
 	"HIGHWAY": true, "EXPRESSWAY": true, "ARTERIAL": true, "COLLECTOR": true,
 	"URBAN": true, "RURAL": true, "LOCAL": true, "SERVICE": true,
+	"UNKNOWN": true,
+}
+
+var legacyRoadTypeAliases = map[string]string{
+	"MIXED":    "UNKNOWN",
+	"SUBURBAN": "UNKNOWN",
+}
+
+func normalizeRoadType(value string) (string, error) {
+	normalized := strings.ToUpper(strings.TrimSpace(value))
+	if normalized == "" {
+		return "UNKNOWN", nil
+	}
+	if validRoadTypes[normalized] {
+		return normalized, nil
+	}
+	if canonical, ok := legacyRoadTypeAliases[normalized]; ok {
+		return canonical, nil
+	}
+	return "", fmt.Errorf("invalid road type %q", value)
 }
 
 func (s *RouteService) buildSegments(routeID string, requests []RouteSegmentRequest) ([]models.RouteSegment, error) {
@@ -70,8 +91,9 @@ func (s *RouteService) buildSegments(routeID string, requests []RouteSegmentRequ
 		if request.SegmentOrder != index+1 {
 			return nil, fmt.Errorf("segment orders must start at 1 and be contiguous")
 		}
-		if !validRoadTypes[request.RoadType] {
-			return nil, fmt.Errorf("invalid road type %q", request.RoadType)
+		roadType, err := normalizeRoadType(request.RoadType)
+		if err != nil {
+			return nil, err
 		}
 		if request.DistanceKM <= 0 || math.IsNaN(request.DistanceKM) || math.IsInf(request.DistanceKM, 0) {
 			return nil, fmt.Errorf("segment %d distance must be greater than zero", request.SegmentOrder)
@@ -86,9 +108,9 @@ func (s *RouteService) buildSegments(routeID string, requests []RouteSegmentRequ
 			}
 		}
 
-		multiplier := s.etaProfiles[request.RoadType]
+		multiplier := s.etaProfiles[roadType]
 		if multiplier <= 0 {
-			return nil, fmt.Errorf("missing ETA profile for road type %q", request.RoadType)
+			return nil, fmt.Errorf("missing ETA profile for road type %q", roadType)
 		}
 		baselineSpeed := 40.0 / multiplier
 		baselineDuration := int(math.Ceil(request.DistanceKM / baselineSpeed * 60))
@@ -106,7 +128,7 @@ func (s *RouteService) buildSegments(routeID string, requests []RouteSegmentRequ
 			DistanceKM: request.DistanceKM,
 			BaselineDurationMinutes: baselineDuration,
 			BaselineSpeedKMH: baselineSpeed,
-			RoadType: request.RoadType,
+			RoadType: roadType,
 			TrafficSensitivityFactor: multiplier,
 		})
 	}

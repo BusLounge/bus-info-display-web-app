@@ -157,7 +157,11 @@ func (r *RouteRepository) GetActiveWithDetails(ctx context.Context) ([]*models.A
 			segment.DistanceKM = distance.Float64
 			segment.BaselineDurationMinutes = int(baselineDuration.Int32)
 			segment.BaselineSpeedKMH = baselineSpeed.Float64
-			segment.RoadType = roadType.String
+				if !roadType.Valid {
+					segment.RoadType = "UNKNOWN"
+				} else {
+					segment.RoadType = roadType.String
+				}
 			segment.TrafficSensitivityFactor = trafficFactor.Float64
 			route.Segments = append(route.Segments, segment)
 			segmentSeen[route.ID][int(segmentOrder.Int32)] = true
@@ -252,15 +256,20 @@ func (r *RouteRepository) getSegments(ctx context.Context, routeID string) ([]mo
 	segments := make([]models.RouteSegment, 0)
 	for rows.Next() {
 		var segment models.RouteSegment
+		var roadType sql.NullString
 		if err := rows.Scan(
 			&segment.ID, &segment.MasterRouteID, &segment.SegmentOrder,
 			&segment.StartLatitude, &segment.StartLongitude,
 			&segment.EndLatitude, &segment.EndLongitude,
 			&segment.DistanceKM, &segment.BaselineDurationMinutes,
-			&segment.BaselineSpeedKMH, &segment.RoadType,
+			&segment.BaselineSpeedKMH, &roadType,
 			&segment.TrafficSensitivityFactor,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan route segment: %w", err)
+		}
+		segment.RoadType = "UNKNOWN"
+		if roadType.Valid {
+			segment.RoadType = roadType.String
 		}
 		segments = append(segments, segment)
 	}

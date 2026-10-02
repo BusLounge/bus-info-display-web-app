@@ -147,7 +147,16 @@ export interface RouteSegment {
   bearing: number;
   bearingDirection: string;
   distanceFormatted: string;
-  roadType?: 'urban' | 'suburban' | 'rural' | 'highway' | 'mixed';
+  roadType?:
+    | 'HIGHWAY'
+    | 'EXPRESSWAY'
+    | 'ARTERIAL'
+    | 'COLLECTOR'
+    | 'URBAN'
+    | 'RURAL'
+    | 'LOCAL'
+    | 'SERVICE'
+    | 'UNKNOWN';
 }
 
 /**

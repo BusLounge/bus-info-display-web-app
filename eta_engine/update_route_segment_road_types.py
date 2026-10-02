@@ -189,11 +189,11 @@ out tags;
     return map_osm_road_types(osm_tags, detailed=detailed)
 
 
-def fetch_null_segments(connection: Any) -> pd.DataFrame:
+def fetch_unclassified_segments(connection: Any) -> pd.DataFrame:
     query = """
         SELECT id, start_latitude, start_longitude, end_latitude, end_longitude
         FROM route_segments
-        WHERE road_type IS NULL
+        WHERE road_type IS NULL OR road_type = 'UNKNOWN'
         ORDER BY id
     """
     return pd.read_sql_query(query, connection)
@@ -210,7 +210,7 @@ def update_road_types(connection: Any, updates: list[tuple[str, str]]) -> None:
             SET road_type = incoming.road_type, updated_at = NOW()
             FROM (VALUES %s) AS incoming(id, road_type)
             WHERE rs.id = incoming.id::uuid
-                AND rs.road_type IS NULL
+                AND (rs.road_type IS NULL OR rs.road_type = 'UNKNOWN')
             """,
             updates,
             template="(%s::uuid, %s)",
@@ -230,9 +230,9 @@ def main() -> int:
     failed = 0
 
     try:
-        all_segments = fetch_null_segments(connection)
+        all_segments = fetch_unclassified_segments(connection)
         if all_segments.empty:
-            logger.info("No route segments with NULL road_type were found")
+            logger.info("No unclassified route segments were found")
             return 0
 
         for batch_start in range(0, len(all_segments), args.batch_size):

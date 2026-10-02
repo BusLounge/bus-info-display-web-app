@@ -7,7 +7,16 @@ import { RouteService, MasterRoute } from '../../core/services/route.service';
 import { decodePolyline, encodePolyline, LatLng, distanceToSegment, calculateDistance } from '../../core/utils/polyline.utils';
 
 type EditModeType = 'add' | 'select' | 'insert' | 'move';
-export type RoadType = 'urban' | 'suburban' | 'rural' | 'highway' | 'mixed';
+export type RoadType =
+  | 'HIGHWAY'
+  | 'EXPRESSWAY'
+  | 'ARTERIAL'
+  | 'COLLECTOR'
+  | 'URBAN'
+  | 'RURAL'
+  | 'LOCAL'
+  | 'SERVICE'
+  | 'UNKNOWN';
 
 interface EditableRouteSegment {
   segmentOrder: number;
@@ -38,7 +47,17 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   points: LatLng[] = [];
   segments: EditableRouteSegment[] = [];
   selectedSegmentIndex: number | null = null;
-  readonly roadTypes: RoadType[] = ['urban', 'suburban', 'rural', 'highway', 'mixed'];
+  readonly roadTypes: RoadType[] = [
+    'HIGHWAY',
+    'EXPRESSWAY',
+    'ARTERIAL',
+    'COLLECTOR',
+    'URBAN',
+    'RURAL',
+    'LOCAL',
+    'SERVICE',
+    'UNKNOWN',
+  ];
   highlightedPointIndex: number | null = null;
   selectedPoints: Set<number> = new Set();
   
@@ -282,7 +301,7 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private rebuildSegments(existingSegments?: MasterRoute['segments']): void {
     const previousTypes = existingSegments?.map(segment => segment.roadType)
       || this.segments.map(segment => segment.roadType);
-    const defaultType: RoadType = 'mixed';
+    const defaultType: RoadType = 'UNKNOWN';
 
     this.segments = this.points.slice(0, -1).map((from, index) => {
       const to = this.points[index + 1];
@@ -302,11 +321,15 @@ export class RouteEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   getRoadTypeColor(roadType: RoadType): string {
     const colors: Record<RoadType, string> = {
-      urban: '#dc2626',
-      suburban: '#f59e0b',
-      rural: '#16a34a',
-      highway: '#2563eb',
-      mixed: '#7c3aed',
+      HIGHWAY: '#2563eb',
+      EXPRESSWAY: '#1d4ed8',
+      ARTERIAL: '#dc2626',
+      COLLECTOR: '#f59e0b',
+      URBAN: '#be123c',
+      RURAL: '#16a34a',
+      LOCAL: '#7c3aed',
+      SERVICE: '#64748b',
+      UNKNOWN: '#6b7280',
     };
     return colors[roadType];
   }
