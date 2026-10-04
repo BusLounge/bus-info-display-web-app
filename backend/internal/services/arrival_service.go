@@ -3,12 +3,15 @@ package services
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
+	"strings"
+	"time"
+
 	"bus-schedule-lounge/internal/database"
 	"bus-schedule-lounge/internal/models"
 	"bus-schedule-lounge/pkg/utils"
-	"fmt"
-	"time"
 )
 
 type ETARequest struct {
@@ -36,11 +39,16 @@ type BatchETAResponseItem struct {
 }
 
 type ArrivalService struct {
-	repo *database.ArrivalRepository
+	repo       *database.ArrivalRepository
+	etaProfiles map[string]float64
 }
 
-func NewArrivalService(repo *database.ArrivalRepository) *ArrivalService {
-	return &ArrivalService{repo: repo}
+func NewArrivalService(repo *database.ArrivalRepository, etaProfiles ...map[string]float64) *ArrivalService {
+	service := &ArrivalService{repo: repo}
+	if len(etaProfiles) > 0 {
+		service.etaProfiles = etaProfiles[0]
+	}
+	return service
 }
 
 // GetAllLoungeArrivals gets arrivals for all lounges with calculated remarks
@@ -152,21 +160,23 @@ func (s *ArrivalService) processArrivals(arrivals []models.ArrivalInfo) {
 				arrival.DistanceKm = utils.HaversineDistance(*arrival.CurrentLat, *arrival.CurrentLng, *arrival.LoungeLat, *arrival.LoungeLng)
 			}
 		} else if hasGPSData {
-			// Fallback: Calculate distance between bus and THIS specific lounge
-			distance := utils.HaversineDistance(
+			distance, currentETAMinutes, foundRouteETA := calculateSegmentBasedETA(
 				*arrival.CurrentLat, *arrival.CurrentLng,
 				*arrival.LoungeLat, *arrival.LoungeLng,
+				arrival.RouteSegments, s.etaProfiles,
 			)
-			arrival.DistanceKm = distance
-
-			// Step 2: Get speed (from database or use fallback)
-			speed := utils.DefaultFallbackSpeedKmh
-			if arrival.CurrentSpeedKmh != nil && *arrival.CurrentSpeedKmh >= utils.MinSpeedThresholdKmh {
-				speed = *arrival.CurrentSpeedKmh
+			if !foundRouteETA {
+				distance = utils.HaversineDistance(
+					*arrival.CurrentLat, *arrival.CurrentLng,
+					*arrival.LoungeLat, *arrival.LoungeLng,
+				)
+				speed := utils.DefaultFallbackSpeedKmh
+				if arrival.CurrentSpeedKmh != nil && *arrival.CurrentSpeedKmh >= utils.MinSpeedThresholdKmh {
+					speed = *arrival.CurrentSpeedKmh
+				}
+				currentETAMinutes = utils.CalculateETAMinutes(distance, speed)
 			}
-
-			// Step 3: Calculate current ETA in minutes for THIS lounge
-			currentETAMinutes := utils.CalculateETAMinutes(distance, speed)
+			arrival.DistanceKm = distance
 			arrival.CalculatedETAMinutes = currentETAMinutes
 
 			// Step 4: Apply offset adjustment if available for THIS lounge
@@ -220,6 +230,89 @@ func (s *ArrivalService) processArrivals(arrivals []models.ArrivalInfo) {
 			arrival.Remarks = fmt.Sprintf("Expected at %s", arrival.ETA.Format("15:04"))
 		}
 	}
+}
+
+func calculateSegmentBasedETA(
+	currentLat, currentLng, loungeLat, loungeLng float64,
+	segments []models.RouteSegment,
+	etaProfiles map[string]float64,
+) (distanceKm, etaMinutes float64, ok bool) {
+	if len(segments) == 0 {
+		return 0, 0, false
+	}
+
+	referenceLatitude := (currentLat + loungeLat) / 2
+	currentPosition, currentDistance := nearestRoutePosition(currentLat, currentLng, segments, referenceLatitude)
+	loungePosition, loungeDistance := nearestRoutePosition(loungeLat, loungeLng, segments, referenceLatitude)
+	if currentDistance < 0 || loungeDistance < 0 || loungePosition <= currentPosition {
+		return 0, 0, false
+	}
+
+	cumulativeDistance := 0.0
+	for _, segment := range segments {
+		segmentEnd := cumulativeDistance + segment.DistanceKM
+		overlapStart := math.Max(currentPosition, cumulativeDistance)
+		overlapEnd := math.Min(loungePosition, segmentEnd)
+		if overlapEnd > overlapStart {
+			segmentDistance := overlapEnd - overlapStart
+			distanceKm += segmentDistance
+			etaMinutes += segmentDistance / segmentBaselineSpeed(segment, etaProfiles) * 60
+		}
+		cumulativeDistance = segmentEnd
+	}
+
+	return distanceKm, etaMinutes, distanceKm > 0
+}
+
+func nearestRoutePosition(latitude, longitude float64, segments []models.RouteSegment, referenceLatitude float64) (positionKm, distanceKm float64) {
+	bestDistance := math.Inf(1)
+	cumulativeDistance := 0.0
+	positionKm = -1
+	distanceKm = -1
+	cosLatitude := math.Cos(referenceLatitude * math.Pi / 180)
+
+	pointX := longitude * 111.32 * cosLatitude
+	pointY := latitude * 110.574
+	for _, segment := range segments {
+		if segment.DistanceKM <= 0 || math.IsNaN(segment.DistanceKM) || math.IsInf(segment.DistanceKM, 0) {
+			continue
+		}
+
+		startX := segment.StartLongitude * 111.32 * cosLatitude
+		startY := segment.StartLatitude * 110.574
+		endX := segment.EndLongitude * 111.32 * cosLatitude
+		endY := segment.EndLatitude * 110.574
+		deltaX := endX - startX
+		deltaY := endY - startY
+		lengthSquared := deltaX*deltaX + deltaY*deltaY
+		fraction := 0.0
+		if lengthSquared > 0 {
+			fraction = ((pointX-startX)*deltaX + (pointY-startY)*deltaY) / lengthSquared
+			fraction = math.Max(0, math.Min(fraction, 1))
+		}
+
+		projectedX := startX + fraction*deltaX
+		projectedY := startY + fraction*deltaY
+		distance := math.Hypot(pointX-projectedX, pointY-projectedY)
+		if distance < bestDistance {
+			bestDistance = distance
+			positionKm = cumulativeDistance + fraction*segment.DistanceKM
+			distanceKm = distance
+		}
+		cumulativeDistance += segment.DistanceKM
+	}
+
+	return positionKm, distanceKm
+}
+
+func segmentBaselineSpeed(segment models.RouteSegment, etaProfiles map[string]float64) float64 {
+	if multiplier := etaProfiles[strings.ToUpper(strings.TrimSpace(segment.RoadType))]; multiplier > 0 && !math.IsNaN(multiplier) && !math.IsInf(multiplier, 0) {
+		return utils.DefaultFallbackSpeedKmh / multiplier
+	}
+	if segment.BaselineSpeedKMH > 0 && !math.IsNaN(segment.BaselineSpeedKMH) && !math.IsInf(segment.BaselineSpeedKMH, 0) {
+		return segment.BaselineSpeedKMH
+	}
+	return utils.DefaultFallbackSpeedKmh
 }
 
 // groupByLounge groups arrivals by lounge

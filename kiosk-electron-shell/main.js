@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const { spawn, execFile } = require('child_process');
 const api = require('./api');
 const express = require('express');
@@ -12,6 +13,46 @@ const EXPRESS_PORT = 4200;
 function getAppResourcePath(...segments) {
   const resourceRoot = app.isPackaged ? process.resourcesPath : __dirname;
   return path.join(resourceRoot, ...segments);
+}
+
+function getLocalScheduleSnapshot(port) {
+  return new Promise((resolve, reject) => {
+    const request = http.get({
+      hostname: '127.0.0.1',
+      port,
+      path: '/local/schedule',
+      timeout: 3000
+    }, (response) => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => { body += chunk; });
+      response.on('end', () => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          reject(new Error(`Local schedule endpoint returned HTTP ${response.statusCode}`));
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(body));
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+
+    request.on('timeout', () => request.destroy(new Error('Local schedule endpoint timed out')));
+    request.on('error', reject);
+  });
+}
+
+async function readAgentSnapshot(filename) {
+  const configPath = getConfigPath();
+  const configData = await fs.promises.readFile(configPath, 'utf8');
+  const config = JSON.parse(configData);
+  const storeDir = typeof config.storeDir === 'string' ? config.storeDir : './local-store';
+  const snapshotPath = path.resolve(path.dirname(configPath), storeDir, filename);
+  const snapshotData = await fs.promises.readFile(snapshotPath, 'utf8');
+  return JSON.parse(snapshotData);
 }
 
 function startExpressServer() {
@@ -363,20 +404,36 @@ ipcMain.handle('bridge:get', async (event, endpoint) => {
             broadcastsEnabled: true, // You may want to make this dynamic
             lastBroadcastSync: new Date().toISOString(),
         };
-      // Add cases for 'schedule', 'ads', etc. as you build them out
-      // For now, return empty data to prevent errors
-      case 'schedule':
-        return { loungeId: config.loungeId, departuresRaw: { departures: [] }, arrivalsRaw: { arrivals: [] } };
+      case 'schedule': {
+        const localBridgePort = Number(config.localBridgePort) || 3000;
+        try {
+          return await getLocalScheduleSnapshot(localBridgePort);
+        } catch (bridgeError) {
+          const storeDir = typeof config.storeDir === 'string' ? config.storeDir : './local-store';
+          const snapshotPath = path.resolve(path.dirname(configPath), storeDir, 'schedule.json');
+          try {
+            const snapshot = await fs.promises.readFile(snapshotPath, 'utf8');
+            return JSON.parse(snapshot);
+          } catch (cacheError) {
+            console.error('Could not load the local schedule endpoint or cached snapshot:', bridgeError, cacheError);
+            throw new Error('Local schedule data is unavailable');
+          }
+        }
+      }
       case 'ads':
-        return { items: [] };
+        return readAgentSnapshot('ads-manifest.json');
       case 'lounge-ads':
-        return { items: [] };
+        return readAgentSnapshot('lounge-ads.json');
       case 'broadcasts':
-        return { items: [] };
+        return readAgentSnapshot('broadcasts.json');
       default:
         return {};
     }
   });
+
+ipcMain.handle('bridge:get-ads', () => readAgentSnapshot('ads-manifest.json'));
+ipcMain.handle('bridge:get-broadcasts', () => readAgentSnapshot('broadcasts.json'));
+ipcMain.handle('bridge:get-lounge-ads', () => readAgentSnapshot('lounge-ads.json'));
 
 async function pollForUpdates() {
   if (!deviceId || !mainWindow) return;

@@ -107,6 +107,21 @@ The Windows kiosk runtime is started by [main.js](main.js), separately from Wind
 
 The current startup launches the Go process before creating the kiosk window, but does not wait for an explicit Go health check before rendering the page. Include cold-boot timing and backend readiness in target-device acceptance tests. `npm run dist` packages the application; it does not install the app, configure Windows sign-in, or enable Shell Launcher.
 
+### Schedule bridge and offline behavior
+
+The kiosk schedule flow prefers the Go agent's local snapshot so it can continue displaying the last synchronized schedule during a network outage:
+
+- The Go agent fetches lounge departures and arrivals from the backend on `scheduleIntervalCron`, writes the response atomically to `storeDir/schedule.json`, and serves that snapshot at `http://127.0.0.1:<localBridgePort>/local/schedule`. The default local bridge port is `3000`; deployments may configure another port.
+- Angular's `LocalBridgeService` requests the `schedule` endpoint through Electron IPC. The `bridge:get` handler in [main.js](main.js) first requests `/local/schedule` with a three-second timeout. If the agent endpoint is unavailable or returns an error, Electron reads `schedule.json` relative to the agent config directory and its configured `storeDir`. If neither source is available, IPC rejects the request so Angular can continue to its remote API fallback.
+- The kiosk uses a local snapshot when it contains rows for the requested lounge. Otherwise it requests the backend arrivals and departures APIs. [schedule.service.ts](../frontend/src/app/core/services/schedule.service.ts) propagates request errors instead of converting them to successful empty schedules, and it does not emit temporary empty rows while requests are pending. This allows [bids-display.component.ts](../frontend/src/app/features/bids-display/bids-display.component.ts) to retry from local storage without clearing rows already on screen.
+- Local snapshots include `updatedAt`. The display warns when a snapshot is more than ten minutes old, or when the timestamp is missing or invalid. The ten-minute threshold assumes the default five-minute agent schedule sync interval; adjust the threshold if a deployment configures a longer interval. A genuinely successful API response with no rows still renders the normal no-schedule state.
+
+### Route road-type normalization
+
+Route segments store road classification in `route_segments.road_type`; this is not a separate lookup table. The frontend and Go route service use uppercase canonical values: `HIGHWAY`, `EXPRESSWAY`, `ARTERIAL`, `COLLECTOR`, `URBAN`, `RURAL`, `LOCAL`, `SERVICE`, and `UNKNOWN`. The Go service trims and uppercases input; legacy ambiguous values such as `mixed` and `suburban`, blank values, and omitted values fall back to `UNKNOWN` rather than being guessed.
+
+Apply [migration 008](../backend/migrations/008_normalize_route_segment_road_types.sql) to backfill existing NULL, blank, lowercase, and unsupported values; set the database default to `UNKNOWN`; enforce `NOT NULL`; and constrain stored values to the canonical set. The Go repository also maps legacy SQL NULLs to `UNKNOWN` while deployments roll out the migration. `UNKNOWN` prevents invalid storage but does not guarantee ETA accuracy; review or refine unclassified segments with the road-type updater and validate its results against actual roads.
+
 ### Local admin access
 
 While the Electron kiosk app is running, press **Ctrl+Shift+A** to open the local admin login window. This is wired for both development and the packaged Angular display: the Angular root captures the shortcut and calls the limited `openAdmin()` API exposed by [preload.js](preload.js), which sends an IPC message to [main.js](main.js). Electron main then creates the local login window; the fallback page [index.html](index.html) also handles the chord when the Angular assets are unavailable.
@@ -117,7 +132,7 @@ The preload bridge keeps renderer code from receiving Electron's unrestricted `i
 
 ## Target-device boot and provisioning flow
 
-Use this sequence on each industrial thin client. Prefer centrally managed provisioning (such as your organization's MDM/GPO process) for repeatable fleet deployment. There is currently no Shell Launcher provisioning script in this project; the registry hardening script above only applies per-user Explorer/Task Manager policies.
+Use this sequence on each industrial thin client. Prefer centrally managed provisioning (such as your organization's MDM/GPO process) for repeatable fleet deployment. The project includes [provision-shell-launcher.ps1](provision-shell-launcher.ps1); the separate registry hardening script above applies per-user Explorer/Task Manager policies.
 
 1. Confirm the target Windows edition supports Shell Launcher and determine the device CPU architecture. Build and test the app for that OS/architecture, then install the packaged application to a stable path. The current NSIS target does not configure a Shell Launcher assignment; point Windows to the installed product executable, not `node_modules\electron\electron.exe` or a development folder.
 2. Create a dedicated standard kiosk account and a separate administrator account. Confirm the administrator account can sign in and receives the normal Explorer shell before changing kiosk provisioning.
@@ -128,3 +143,4 @@ Use this sequence on each industrial thin client. Prefer centrally managed provi
 7. Document rollback before rollout: use the administrator or management plane to remove the kiosk user's custom shell assignment or disable Shell Launcher, then reboot and verify the default Explorer shell. Keep installation media and recovery credentials controlled by the device administrator.
 
 Before production deployment, test the packaged installer at its final install path and verify that `resources\bin\agent.exe`, `resources\www`, the writable user-data directory, and the local-store directory all exist and work under the standard kiosk account. Also replace the hard-coded admin credentials in the application before treating the kiosk as secured.
+

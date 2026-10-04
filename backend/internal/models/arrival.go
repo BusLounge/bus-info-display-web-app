@@ -29,6 +29,7 @@ type ArrivalInfo struct {
 	TimeDisplay          string     `json:"time"`
 	DistanceKm           float64    `json:"distanceKm"`
 	CalculatedETAMinutes float64    `json:"calculatedETAMinutes"`
+	RouteSegments        []RouteSegment `json:"-"`
 }
 
 // LoungeArrivalResponse represents arrivals grouped by lounge

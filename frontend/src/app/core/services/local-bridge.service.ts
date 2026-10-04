@@ -6,6 +6,9 @@ import { catchError } from 'rxjs/operators';
 // Define the shape of the Electron API that will be exposed on the window object
 interface IElectronAPI {
   invoke: (channel: string, ...args: any[]) => Promise<any>;
+  getAds: () => Promise<any>;
+  getBroadcasts: () => Promise<any>;
+  getLoungeAds: () => Promise<any>;
 }
 
 declare global {
@@ -30,6 +33,14 @@ export class LocalBridgeService {
     if (this.ipc) {
       // Electron IPC path
       console.log(`[BridgeService] Using IPC for endpoint: ${endpoint}`);
+      switch (endpoint) {
+        case 'ads':
+          return from(this.ipc.getAds() as Promise<T>);
+        case 'broadcasts':
+          return from(this.ipc.getBroadcasts() as Promise<T>);
+        case 'lounge-ads':
+          return from(this.ipc.getLoungeAds() as Promise<T>);
+      }
       return from(this.ipc.invoke('bridge:get', endpoint) as Promise<T>);
     }
     

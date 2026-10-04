@@ -9,5 +9,8 @@ contextBridge.exposeInMainWorld('electron', {
 });
 
 contextBridge.exposeInMainWorld('electronAPI', {
-    invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args)
+  invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
+  getAds: () => ipcRenderer.invoke('bridge:get-ads'),
+  getBroadcasts: () => ipcRenderer.invoke('bridge:get-broadcasts'),
+  getLoungeAds: () => ipcRenderer.invoke('bridge:get-lounge-ads')
 });

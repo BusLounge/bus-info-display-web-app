@@ -56,6 +56,7 @@ type TranslationKey =
 
 interface LocalScheduleSnapshot {
   loungeId: string;
+  updatedAt?: string;
   departuresRaw?: {
     loungeName?: string;
     departures?: Array<{
@@ -916,6 +917,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
 
         if (this.hasUsableLocalSchedule(schedule)) {
           this.applyLocalScheduleSnapshot(schedule);
+          this.error = this.getLocalScheduleFreshnessNotice(schedule);
           this.loading = false;
           return;
         }
@@ -938,6 +940,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       next: (schedule) => {
         this.departures = schedule.departures;
         this.arrivals = schedule.arrivals;
+        this.error = '';
         if (schedule.loungeName) {
           this.loungeName = schedule.loungeName;
         }
@@ -998,6 +1001,20 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       this.initialAdsLoaded = true;
       this.fetchAdvertisementsForLounge();
     }
+  }
+
+  private getLocalScheduleFreshnessNotice(schedule: LocalScheduleSnapshot): string {
+    const updatedAt = schedule.updatedAt ? new Date(schedule.updatedAt) : null;
+    if (!updatedAt || Number.isNaN(updatedAt.getTime())) {
+      return 'Showing cached schedule; update time is unavailable.';
+    }
+
+    if (Date.now() - updatedAt.getTime() > 10 * 60 * 1000) {
+      const displayTime = updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return `Showing cached schedule from ${displayTime}; data may be stale.`;
+    }
+
+    return '';
   }
 
   private fetchAdvertisementsForLounge() {
@@ -1187,7 +1204,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
         }
 
         this.applyLocalScheduleSnapshot(schedule);
-        this.error = 'Schedule loaded from offline storage.';
+        this.error = this.getLocalScheduleFreshnessNotice(schedule);
         this.loading = false;
       },
       error: () => {

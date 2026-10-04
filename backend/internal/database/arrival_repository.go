@@ -3,6 +3,7 @@ package database
 import (
 	"bus-schedule-lounge/internal/models"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 )
 
@@ -60,7 +61,21 @@ func (r *ArrivalRepository) GetAllLoungeArrivals() ([]models.ArrivalInfo, error)
 				) || ' minutes')::INTERVAL as estimated_arrival_time,
 			at.actual_arrival_time,
 			at.status,
-			st.departure_datetime
+			st.departure_datetime,
+			COALESCE((
+				SELECT json_agg(json_build_object(
+					'segmentOrder', rs.segment_order,
+					'startLatitude', rs.start_latitude,
+					'startLongitude', rs.start_longitude,
+					'endLatitude', rs.end_latitude,
+					'endLongitude', rs.end_longitude,
+					'distanceKm', rs.distance_km,
+					'baselineSpeedKmh', rs.baseline_speed_kmh,
+					'roadType', rs.road_type
+				) ORDER BY rs.segment_order)
+				FROM route_segments rs
+				WHERE rs.master_route_id = mr.id
+			), '[]'::json) as route_segments
 		FROM lounges l
 		JOIN lounge_routes lr ON l.id = lr.lounge_id
 		JOIN master_routes mr ON lr.master_route_id = mr.id
@@ -87,6 +102,7 @@ func (r *ArrivalRepository) GetAllLoungeArrivals() ([]models.ArrivalInfo, error)
 	var arrivals []models.ArrivalInfo
 	for rows.Next() {
 		var arrival models.ArrivalInfo
+		var routeSegmentsJSON []byte
 		err := rows.Scan(
 			&arrival.LoungeID,
 			&arrival.LoungeName,
@@ -109,9 +125,13 @@ func (r *ArrivalRepository) GetAllLoungeArrivals() ([]models.ArrivalInfo, error)
 			&arrival.ActualArrival,
 			&arrival.Status,
 			&arrival.DepartureTime,
+			&routeSegmentsJSON,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning arrival: %w", err)
+		}
+		if err := json.Unmarshal(routeSegmentsJSON, &arrival.RouteSegments); err != nil {
+			return nil, fmt.Errorf("error decoding route segments for route %s: %w", arrival.MasterRouteID, err)
 		}
 		arrivals = append(arrivals, arrival)
 	}
@@ -169,7 +189,21 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.Arr
 				) || ' minutes')::INTERVAL as estimated_arrival_time,
 			at.actual_arrival_time,
 			at.status,
-			st.departure_datetime
+			st.departure_datetime,
+			COALESCE((
+				SELECT json_agg(json_build_object(
+					'segmentOrder', rs.segment_order,
+					'startLatitude', rs.start_latitude,
+					'startLongitude', rs.start_longitude,
+					'endLatitude', rs.end_latitude,
+					'endLongitude', rs.end_longitude,
+					'distanceKm', rs.distance_km,
+					'baselineSpeedKmh', rs.baseline_speed_kmh,
+					'roadType', rs.road_type
+				) ORDER BY rs.segment_order)
+				FROM route_segments rs
+				WHERE rs.master_route_id = mr.id
+			), '[]'::json) as route_segments
 		FROM lounges l
 		JOIN lounge_routes lr ON l.id = lr.lounge_id
 		JOIN master_routes mr ON lr.master_route_id = mr.id
@@ -197,6 +231,7 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.Arr
 	var arrivals []models.ArrivalInfo
 	for rows.Next() {
 		var arrival models.ArrivalInfo
+		var routeSegmentsJSON []byte
 		err := rows.Scan(
 			&arrival.LoungeID,
 			&arrival.LoungeName,
@@ -219,9 +254,13 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.Arr
 			&arrival.ActualArrival,
 			&arrival.Status,
 			&arrival.DepartureTime,
+			&routeSegmentsJSON,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning arrival: %w", err)
+		}
+		if err := json.Unmarshal(routeSegmentsJSON, &arrival.RouteSegments); err != nil {
+			return nil, fmt.Errorf("error decoding route segments for route %s: %w", arrival.MasterRouteID, err)
 		}
 		arrivals = append(arrivals, arrival)
 	}

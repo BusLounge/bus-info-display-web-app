@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { combineLatest, map, Observable, of, startWith, catchError } from 'rxjs';
+import { combineLatest, map, Observable } from 'rxjs';
 import { ArrivalService } from './arrival.service';
 import { DepartureService } from './departure.service';
 
@@ -40,14 +40,8 @@ export class ScheduleService {
 
   getScheduleByLounge(loungeId: string): Observable<LoungeScheduleData> {
     return combineLatest({
-      departures: this.departureService.getDeparturesByLoungeId(loungeId).pipe(
-        startWith({ loungeId, loungeName: '', departures: [] }),
-        catchError(() => of({ loungeId, loungeName: '', departures: [] }))
-      ),
-      arrivals: this.arrivalService.getArrivalsByLoungeId(loungeId).pipe(
-        startWith({ loungeId, loungeName: '', arrivals: [] }),
-        catchError(() => of({ loungeId, loungeName: '', arrivals: [] }))
-      )
+      departures: this.departureService.getDeparturesByLoungeId(loungeId),
+      arrivals: this.arrivalService.getArrivalsByLoungeId(loungeId)
     }).pipe(
       map(({ departures, arrivals }) => ({
         loungeName: departures.loungeName || arrivals.loungeName || '',

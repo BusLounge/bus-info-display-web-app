@@ -31,7 +31,7 @@ func main() {
 
 	// Arrival Management
 	arrivalRepo := database.NewArrivalRepository(db.DB)
-	arrivalService := services.NewArrivalService(arrivalRepo)
+	arrivalService := services.NewArrivalService(arrivalRepo, cfg.ETAProfiles)
 	arrivalHandler := handlers.NewArrivalHandler(arrivalService)
 
 	// Departure Management
