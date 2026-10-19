@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 )
 
 type ArrivalRepository struct {
@@ -63,7 +64,7 @@ func (r *ArrivalRepository) GetAllLoungeArrivals() ([]models.ArrivalInfo, error)
 			at.status,
 			st.departure_datetime,
 			COALESCE((
-				SELECT json_agg(json_build_object(
+				SELECT jsonb_agg(jsonb_build_object(
 					'segmentOrder', rs.segment_order,
 					'startLatitude', rs.start_latitude,
 					'startLongitude', rs.start_longitude,
@@ -75,7 +76,7 @@ func (r *ArrivalRepository) GetAllLoungeArrivals() ([]models.ArrivalInfo, error)
 				) ORDER BY rs.segment_order)
 				FROM route_segments rs
 				WHERE rs.master_route_id = mr.id
-			), '[]'::json) as route_segments
+			), '[]'::jsonb) as route_segments
 		FROM lounges l
 		JOIN lounge_routes lr ON l.id = lr.lounge_id
 		JOIN master_routes mr ON lr.master_route_id = mr.id
@@ -145,6 +146,7 @@ func (r *ArrivalRepository) GetAllLoungeArrivals() ([]models.ArrivalInfo, error)
 
 // GetArrivalsByLoungeID gets today's active trip arrivals for a specific lounge from actual database tables
 func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.ArrivalInfo, error) {
+	log.Printf("[GetArrivalsByLoungeID] START params: loungeID=%v", loungeID)
 	query := `
 		SELECT DISTINCT
 			l.id as lounge_id,
@@ -191,7 +193,7 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.Arr
 			at.status,
 			st.departure_datetime,
 			COALESCE((
-				SELECT json_agg(json_build_object(
+				SELECT jsonb_agg(jsonb_build_object(
 					'segmentOrder', rs.segment_order,
 					'startLatitude', rs.start_latitude,
 					'startLongitude', rs.start_longitude,
@@ -203,7 +205,7 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.Arr
 				) ORDER BY rs.segment_order)
 				FROM route_segments rs
 				WHERE rs.master_route_id = mr.id
-			), '[]'::json) as route_segments
+			), '[]'::jsonb) as route_segments
 		FROM lounges l
 		JOIN lounge_routes lr ON l.id = lr.lounge_id
 		JOIN master_routes mr ON lr.master_route_id = mr.id
@@ -224,6 +226,7 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.Arr
 
 	rows, err := r.db.Query(query, loungeID)
 	if err != nil {
+		log.Printf("[GetArrivalsByLoungeID] QUERY ERROR: %v", err)
 		return nil, fmt.Errorf("error fetching arrivals for lounge %s: %w", loungeID, err)
 	}
 	defer rows.Close()
@@ -269,5 +272,6 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.Arr
 		return nil, fmt.Errorf("error iterating arrivals: %w", err)
 	}
 
+	log.Printf("[GetArrivalsByLoungeID] RESULT: %d rows", len(arrivals))
 	return arrivals, nil
 }

@@ -632,12 +632,15 @@ func (r *AdvertisementRepository) GetAll() ([]models.Advertisement, error) {
 
 // getAllInternal allows optional schedule type filtering for reuse
 func (r *AdvertisementRepository) getAllInternal(scheduleType string) ([]models.Advertisement, error) {
+	log.Printf("[getAllInternal] START params: scheduleType=%v", scheduleType)
 	hasSlotsArray, err := r.columnExists("advertisements", "play_time_slots")
 	if err != nil {
+		log.Printf("[getAllInternal] QUERY ERROR: %v", err)
 		return nil, err
 	}
 	hasLegacySlot, err := r.columnExists("advertisements", "play_time_slot")
 	if err != nil {
+		log.Printf("[getAllInternal] QUERY ERROR: %v", err)
 		return nil, err
 	}
 
@@ -673,6 +676,7 @@ func (r *AdvertisementRepository) getAllInternal(scheduleType string) ([]models.
 
 	rows, err := r.db.Query(query, scheduleType)
 	if err != nil {
+		log.Printf("[getAllInternal] QUERY ERROR: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -759,6 +763,7 @@ func (r *AdvertisementRepository) getAllInternal(scheduleType string) ([]models.
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	log.Printf("[getAllInternal] RESULT: %d rows", len(advertisements))
 	return advertisements, nil
 }
 
@@ -1123,6 +1128,7 @@ func (r *AdvertisementRepository) CreateGroup(group *models.AdvertisementGroup) 
 }
 
 func (r *AdvertisementRepository) GetAllGroups() ([]models.AdvertisementGroup, error) {
+	log.Printf("[GetAllGroups] START")
 	// Use a LEFT JOIN to count advertisements per group dynamically
 	query := `
 		SELECT 
@@ -1139,6 +1145,7 @@ func (r *AdvertisementRepository) GetAllGroups() ([]models.AdvertisementGroup, e
 
 	rows, err := r.db.Query(query)
 	if err != nil {
+		log.Printf("[GetAllGroups] QUERY ERROR: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -1153,6 +1160,7 @@ func (r *AdvertisementRepository) GetAllGroups() ([]models.AdvertisementGroup, e
 		}
 		groups = append(groups, group)
 	}
+	log.Printf("[GetAllGroups] RESULT: %d rows", len(groups))
 	return groups, nil
 }
 

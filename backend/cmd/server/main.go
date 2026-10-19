@@ -6,9 +6,15 @@ import (
 	"bus-schedule-lounge/internal/handlers"
 	"bus-schedule-lounge/internal/middleware"
 	"bus-schedule-lounge/internal/services"
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -21,6 +27,16 @@ func main() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 	defer db.Close()
+
+	tripGeneratorLocation, err := services.LoadTripGeneratorLocation()
+	if err != nil {
+		log.Fatal("Failed to configure daily trip generator:", err)
+	}
+	tripScheduleRepo := database.NewTripScheduleRepository(db.DB)
+	tripGenerator := services.NewTripGeneratorService(tripScheduleRepo, tripGeneratorLocation)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go tripGenerator.Run(ctx)
 
 	adRepo := database.NewAdvertisementRepository(db.DB)
 	adService := services.NewAdvertisementService(adRepo)
@@ -165,5 +181,22 @@ func main() {
 
 	addr := fmt.Sprintf(":%s", cfg.ServerPort)
 	log.Printf("Server starting on port %s", cfg.ServerPort)
-	log.Fatal(http.ListenAndServe(addr, router))
+	server := &http.Server{Addr: addr, Handler: router}
+	serverErrors := make(chan error, 1)
+	go func() {
+		serverErrors <- server.ListenAndServe()
+	}()
+
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Failed to gracefully shut down HTTP server: %v", err)
+		}
+	case err := <-serverErrors:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("HTTP server stopped unexpectedly: %v", err)
+		}
+	}
 }

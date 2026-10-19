@@ -18,8 +18,8 @@ from dotenv import load_dotenv
 from psycopg2.extras import execute_values
 
 DEFAULT_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-DEFAULT_BATCH_SIZE = 20
-DEFAULT_REQUEST_DELAY = 2.5
+DEFAULT_BATCH_SIZE = 10
+DEFAULT_REQUEST_DELAY = 2.0
 DEFAULT_HTTP_TIMEOUT = 30
 DEFAULT_OVERPASS_RETRIES = 4
 DEFAULT_OVERPASS_BACKOFF = 2.0
@@ -67,13 +67,19 @@ def parse_args() -> argparse.Namespace:
         "--batch-size",
         type=int,
         default=DEFAULT_BATCH_SIZE,
-        help=f"Rows fetched and committed per batch (default: {DEFAULT_BATCH_SIZE}).",
+        help=(
+            "Rows fetched and committed per batch "
+            f"(default: {DEFAULT_BATCH_SIZE})."
+        ),
     )
     parser.add_argument(
         "--delay",
         type=float,
         default=DEFAULT_REQUEST_DELAY,
-        help=f"Seconds between Overpass requests (default: {DEFAULT_REQUEST_DELAY}).",
+        help=(
+            "Seconds to wait between Overpass requests "
+            f"(default: {DEFAULT_REQUEST_DELAY})."
+        ),
     )
     parser.add_argument(
         "--radius-meters",
@@ -122,6 +128,22 @@ def map_osm_road_types(
     return counts.most_common(1)[0][0]
 
 
+def _retry_delay(attempt: int, response: requests.Response | None = None) -> float:
+    backoff = min(DEFAULT_OVERPASS_BACKOFF * (2**attempt), MAX_OVERPASS_BACKOFF)
+    if response is None:
+        return backoff
+
+    retry_after = response.headers.get("Retry-After")
+    if retry_after is not None:
+        try:
+            backoff = max(backoff, min(float(retry_after), MAX_OVERPASS_BACKOFF))
+        except ValueError:
+            logger.warning(
+                "Ignoring invalid Overpass Retry-After value: %r", retry_after
+            )
+    return backoff
+
+
 def query_overpass(
     session: requests.Session,
     endpoint: str,
@@ -153,11 +175,14 @@ out tags;
             response.raise_for_status()
             break
         except requests.HTTPError as error:
-            status_code = error.response.status_code if error.response is not None else None
-            retryable = status_code == 429 or status_code is not None and 500 <= status_code < 600
+            response = error.response
+            status_code = response.status_code if response is not None else None
+            retryable = status_code == 429 or (
+                status_code is not None and 500 <= status_code < 600
+            )
             if not retryable or attempt >= DEFAULT_OVERPASS_RETRIES:
                 raise
-            backoff = min(DEFAULT_OVERPASS_BACKOFF * (2**attempt), MAX_OVERPASS_BACKOFF)
+            backoff = _retry_delay(attempt, response)
             logger.warning(
                 "Overpass returned HTTP %s; retrying in %.1f seconds (attempt %d/%d)",
                 status_code,
@@ -169,7 +194,7 @@ out tags;
         except requests.RequestException as error:
             if attempt >= DEFAULT_OVERPASS_RETRIES:
                 raise
-            backoff = min(DEFAULT_OVERPASS_BACKOFF * (2**attempt), MAX_OVERPASS_BACKOFF)
+            backoff = _retry_delay(attempt)
             logger.warning(
                 "Overpass request error (%s); retrying in %.1f seconds (attempt %d/%d)",
                 error,

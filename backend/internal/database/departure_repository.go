@@ -4,6 +4,7 @@ import (
 	"bus-schedule-lounge/internal/models"
 	"database/sql"
 	"fmt"
+	"log"
 )
 
 type DepartureRepository struct {
@@ -133,6 +134,7 @@ func (r *DepartureRepository) GetAllLoungeDepartures() ([]models.DepartureInfo, 
 
 // GetDeparturesByLoungeID gets today's active trip departures for a specific lounge from actual database tables
 func (r *DepartureRepository) GetDeparturesByLoungeID(loungeID string) ([]models.DepartureInfo, error) {
+	log.Printf("[GetDeparturesByLoungeID] START params: loungeID=%v", loungeID)
 	query := `
 		SELECT DISTINCT
 			l.id as lounge_id,
@@ -208,6 +210,7 @@ func (r *DepartureRepository) GetDeparturesByLoungeID(loungeID string) ([]models
 
 	rows, err := r.db.Query(query, loungeID)
 	if err != nil {
+		log.Printf("[GetDeparturesByLoungeID] QUERY ERROR: %v", err)
 		return nil, fmt.Errorf("error fetching departures for lounge: %w", err)
 	}
 	defer rows.Close()
@@ -246,5 +249,6 @@ func (r *DepartureRepository) GetDeparturesByLoungeID(loungeID string) ([]models
 		return nil, fmt.Errorf("error iterating departures: %w", err)
 	}
 
+	log.Printf("[GetDeparturesByLoungeID] RESULT: %d rows", len(departures))
 	return departures, nil
 }

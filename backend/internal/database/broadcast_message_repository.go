@@ -4,6 +4,7 @@ import (
 	"bus-schedule-lounge/internal/models"
 	"database/sql"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -103,6 +104,7 @@ func (r *BroadcastMessageRepository) GetAll() ([]models.BroadcastMessage, error)
 }
 
 func (r *BroadcastMessageRepository) GetActiveForTV(now time.Time) ([]models.BroadcastMessage, error) {
+	log.Printf("[GetActiveForTV] START params: now=%v", now)
 	query := `
 		SELECT id, message, priority, display_duration_seconds, frequency_seconds,
 			start_at, end_at, is_active, show_on_lounge_tv, created_at, updated_at
@@ -116,6 +118,7 @@ func (r *BroadcastMessageRepository) GetActiveForTV(now time.Time) ([]models.Bro
 
 	rows, err := r.db.Query(query, now)
 	if err != nil {
+		log.Printf("[GetActiveForTV] QUERY ERROR: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -141,6 +144,7 @@ func (r *BroadcastMessageRepository) GetActiveForTV(now time.Time) ([]models.Bro
 		items = append(items, item)
 	}
 
+	log.Printf("[GetActiveForTV] RESULT: %d rows", len(items))
 	return items, nil
 }
 
