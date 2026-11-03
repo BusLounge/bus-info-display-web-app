@@ -47,7 +47,7 @@ export class ScheduleService {
         loungeName: departures.loungeName || arrivals.loungeName || '',
         departures: departures.departures.map((dep) => ({
           time: this.toDisplayTime(dep.time),
-          busNo: dep.busNo,
+          busNo: dep.busNo || 'TBA',
           routeNo: dep.routeNumber,
           destination: dep.destination,
           remarks: dep.remarks || dep.status || '',
@@ -56,7 +56,7 @@ export class ScheduleService {
         })),
         arrivals: arrivals.arrivals.map((arr) => ({
           time: this.toDisplayTime(arr.time),
-          busNo: arr.busNo,
+          busNo: arr.busNo || 'TBA',
           routeNo: arr.routeNumber,
           origin: arr.origin,
           remarks: arr.remarks || arr.status || '',
@@ -117,3 +117,5 @@ export class ScheduleService {
     );
   }
 }
+
+

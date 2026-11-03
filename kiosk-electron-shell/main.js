@@ -95,6 +95,11 @@ let deviceId;
 let pollingInterval;
 let goProcess;
 let isQuitting = false;
+let goRestartTimer;
+let goRestartAttempts = 0;
+const intentionallyStoppedGoProcesses = new WeakSet();
+const GO_RESTART_BASE_DELAY_MS = 3000;
+const GO_RESTART_MAX_DELAY_MS = 60000;
 
 const DISPLAY_RESOLUTION_PRESETS = {
   '1280x720': { width: 1280, height: 720 },
@@ -130,11 +135,36 @@ function getConfigPath() {
     return path.join(__dirname, '..', 'tv-sync-agent-go', 'config.json');
 }
 
+function scheduleGoProcessRestart(child) {
+  if (isQuitting || (child && intentionallyStoppedGoProcesses.has(child)) || goRestartTimer) {
+    return;
+  }
+
+  const delay = Math.min(
+    GO_RESTART_BASE_DELAY_MS * (2 ** goRestartAttempts),
+    GO_RESTART_MAX_DELAY_MS
+  );
+  goRestartAttempts += 1;
+  console.warn(`Go Agent restart scheduled in ${Math.round(delay / 1000)} seconds.`);
+
+  goRestartTimer = setTimeout(() => {
+    goRestartTimer = null;
+    if (!isQuitting) {
+      startGoProcess();
+    }
+  }, delay);
+}
 
 function stopGoProcess() {
+  if (goRestartTimer) {
+    clearTimeout(goRestartTimer);
+    goRestartTimer = null;
+  }
+
   const child = goProcess;
   if (!child) return Promise.resolve();
 
+  intentionallyStoppedGoProcesses.add(child);
   console.log(`Stopping Go backend process with PID: ${child.pid || 'unknown'}...`);
 
   return new Promise((resolve) => {
@@ -194,6 +224,8 @@ function stopGoProcess() {
 
 
 function startGoProcess() {
+  if (isQuitting) return;
+
   if (goProcess && goProcess.exitCode === null && goProcess.signalCode === null) {
     console.log(`Go backend is already running with PID: ${goProcess.pid || 'unknown'}.`);
     return;
@@ -203,6 +235,7 @@ function startGoProcess() {
   if (app.isPackaged || fs.existsSync(agentExe)) {
     if (!fs.existsSync(agentExe)) {
       console.error(`Bundled Go backend executable was not found: ${agentExe}`);
+      scheduleGoProcessRestart(null);
       return;
     }
 
@@ -222,6 +255,7 @@ function startGoProcess() {
                 displayMode: "both",
                 layoutMode: "split-screen",
                 storeDir: "./local-store",
+                serverUrl: "http://18.140.238.163:4000",
                 apiBaseUrl: "http://18.140.238.163:4000/api",
                 syncFrequencySeconds: 30,
                 displayResolution: "1920x1080",
@@ -235,6 +269,7 @@ function startGoProcess() {
         } catch (error) {
           console.error('Failed to start bundled Go backend:', error);
           goProcess = null;
+          scheduleGoProcessRestart(null);
           return;
         }
     } else {
@@ -247,6 +282,7 @@ function startGoProcess() {
         } catch (error) {
           console.error('Failed to start Go backend in development mode:', error);
           goProcess = null;
+          scheduleGoProcessRestart(null);
           return;
         }
     }
@@ -257,6 +293,7 @@ function startGoProcess() {
 
     child.on('error', (error) => {
         console.error('Go backend process could not be started:', error);
+        scheduleGoProcessRestart(child);
     });
     
     child.on('close', (code) => {
@@ -266,6 +303,9 @@ function startGoProcess() {
           console.log(`Go backend process exited with code ${code}.`);
         }
         if (goProcess === child) goProcess = null;
+        if (!intentionallyStoppedGoProcesses.has(child)) {
+          scheduleGoProcessRestart(child);
+        }
     });
 }
 
@@ -285,7 +325,28 @@ function createMainWindow() {
   const angularIndexPath = getAppResourcePath('www', 'index.html');
 
   if (fs.existsSync(angularIndexPath)) {
-    mainWindow.loadURL('http://localhost:4200/bids-display');
+    let displayUrl = 'http://localhost:4200/bids-display';
+
+    try {
+      const configPath = getConfigPath();
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const loungeId = String(config.loungeId || '').trim();
+      const loungeName = String(config.loungeGroup || '').trim();
+
+      if (loungeId) {
+        const params = new URLSearchParams({
+          loungeId,
+          loungeName,
+          kiosk: 'true'
+        });
+
+        displayUrl += `?${params.toString()}`;
+      }
+    } catch (error) {
+      console.error('Could not load kiosk config for the display URL:', error);
+    }
+
+    mainWindow.loadURL(displayUrl);
   } else {
     mainWindow.loadFile('index.html');
   }
@@ -466,9 +527,17 @@ ipcMain.on('admin-credentials', async (event, credentials) => {
             // Provide default base config
             config = {
                 storeDir: "./local-store",
+                serverUrl: "http://18.140.238.163:4000",
                 apiBaseUrl: "http://18.140.238.163:4000/api"
             };
         }
+
+        const configuredServerUrl =
+            config.serverUrl || config.apiBaseUrl || "http://18.140.238.163:4000/api";
+
+        config.serverUrl = configuredServerUrl
+            .replace(/\/api\/?$/i, "")
+            .replace(/\/+$/, "");
         
       const syncFrequencySeconds = normalizeSyncFrequencySeconds(credentials.syncFrequencySeconds);
       const displayResolution = normalizeDisplayResolution(credentials.displayResolution);

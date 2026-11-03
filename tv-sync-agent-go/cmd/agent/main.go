@@ -11,6 +11,7 @@ import (
 	"tv-sync-agent-go/internal/config"
 	"tv-sync-agent-go/internal/server"
 	syncagent "tv-sync-agent-go/internal/sync"
+	wsupdates "tv-sync-agent-go/internal/websocket"
 )
 
 func main() {
@@ -28,6 +29,13 @@ func main() {
 	defer cancel()
 
 	go a.Run(ctx)
+
+	wsClient, err := wsupdates.NewAgentWSClient(cfg.ServerURL, cfg.LoungeID, a)
+	if err != nil {
+		log.Printf("configure websocket updates; continuing with HTTP polling: %v", err)
+	} else {
+		go wsClient.Run(ctx)
+	}
 
 	srv := server.New(a, cfg.LocalBridgePort)
 	go func() {

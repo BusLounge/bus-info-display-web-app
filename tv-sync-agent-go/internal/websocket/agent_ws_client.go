@@ -139,6 +139,16 @@ func (c *AgentWSClient) runConnection(ctx context.Context) error {
 	conn.SetPongHandler(func(string) error {
 		return conn.SetReadDeadline(time.Now().Add(70 * time.Second))
 	})
+	conn.SetPingHandler(func(appData string) error {
+		if err := conn.SetReadDeadline(time.Now().Add(70 * time.Second)); err != nil {
+			return err
+		}
+		return conn.WriteControl(
+			gorilla.PongMessage,
+			[]byte(appData),
+			time.Now().Add(10*time.Second),
+		)
+	})
 
 	for {
 		var notification Notification

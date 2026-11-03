@@ -6,6 +6,7 @@ import (
 	"bus-schedule-lounge/internal/handlers"
 	"bus-schedule-lounge/internal/middleware"
 	"bus-schedule-lounge/internal/services"
+	wsupdates "bus-schedule-lounge/internal/websocket"
 	"context"
 	"errors"
 	"fmt"
@@ -28,12 +29,20 @@ func main() {
 	}
 	defer db.Close()
 
+	updatesHub := wsupdates.NewHub(func(_ *http.Request, _ string) bool {
+		return true
+	})
+
 	tripGeneratorLocation, err := services.LoadTripGeneratorLocation()
 	if err != nil {
 		log.Fatal("Failed to configure daily trip generator:", err)
 	}
 	tripScheduleRepo := database.NewTripScheduleRepository(db.DB)
-	tripGenerator := services.NewTripGeneratorService(tripScheduleRepo, tripGeneratorLocation)
+	tripGenerator := services.NewTripGeneratorService(
+		tripScheduleRepo,
+		tripGeneratorLocation,
+		updatesHub,
+	)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go tripGenerator.Run(ctx)
@@ -43,7 +52,7 @@ func main() {
 	if err := adService.EnsureCalculationSchema(); err != nil {
 		log.Fatal("Failed to initialize advertisement calculation schema:", err)
 	}
-	adHandler := handlers.NewAdvertisementHandler(adService, cfg.MediaDir)
+	adHandler := handlers.NewAdvertisementHandler(adService, cfg.MediaDir, updatesHub)
 
 	// Arrival Management
 	arrivalRepo := database.NewArrivalRepository(db.DB)
@@ -63,7 +72,7 @@ func main() {
 	// Route Management
 	routeRepo := database.NewRouteRepository(db.DB)
 	routeService := services.NewRouteService(routeRepo, cfg.ETAProfiles)
-	routeHandler := handlers.NewRouteHandler(routeService)
+	routeHandler := handlers.NewRouteHandler(routeService, routeRepo, updatesHub)
 
 	// Broadcast Messaging
 	broadcastRepo := database.NewBroadcastMessageRepository(db.DB)
@@ -71,7 +80,7 @@ func main() {
 	if err := broadcastService.EnsureSchema(); err != nil {
 		log.Fatal("Failed to initialize broadcast message schema:", err)
 	}
-	broadcastHandler := handlers.NewBroadcastMessageHandler(broadcastService)
+	broadcastHandler := handlers.NewBroadcastMessageHandler(broadcastService, updatesHub)
 	authHandler := handlers.NewAuthHandler(
 		cfg.JWTSecret,
 		cfg.JWTRefreshSecret,
@@ -87,7 +96,7 @@ func main() {
 	if err := loungeAdService.EnsureSchema(); err != nil {
 		log.Fatal("Failed to initialize lounge ad schema:", err)
 	}
-	loungeAdHandler := handlers.NewLoungeAdHandler(loungeAdService)
+	loungeAdHandler := handlers.NewLoungeAdHandler(loungeAdService, updatesHub)
 
 	// Dashboard
 	dashboardRepo := database.NewDashboardRepository(db.DB)
@@ -105,6 +114,8 @@ func main() {
 	api := router.PathPrefix("/api").Subrouter()
 	protected := api.PathPrefix("").Subrouter()
 	protected.Use(middleware.RequireAuth(cfg.JWTSecret))
+
+	api.Handle("/tv/updates", updatesHub)
 
 	api.HandleFunc("/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
 	api.HandleFunc("/auth/me", authHandler.Me).Methods("GET", "OPTIONS")

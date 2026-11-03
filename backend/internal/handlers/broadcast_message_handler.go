@@ -4,17 +4,26 @@ import (
 	"bus-schedule-lounge/internal/models"
 	"bus-schedule-lounge/internal/services"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
+	wsupdates "bus-schedule-lounge/internal/websocket"
 )
 
 type BroadcastMessageHandler struct {
-	service *services.BroadcastMessageService
+	service    *services.BroadcastMessageService
+	updatesHub *wsupdates.Hub
 }
 
-func NewBroadcastMessageHandler(service *services.BroadcastMessageService) *BroadcastMessageHandler {
-	return &BroadcastMessageHandler{service: service}
+func NewBroadcastMessageHandler(
+	service *services.BroadcastMessageService,
+	updatesHub *wsupdates.Hub,
+) *BroadcastMessageHandler {
+	return &BroadcastMessageHandler{
+		service:    service,
+		updatesHub: updatesHub,
+	}
 }
 
 func (h *BroadcastMessageHandler) GetAll(w http.ResponseWriter, _ *http.Request) {
@@ -47,6 +56,9 @@ func (h *BroadcastMessageHandler) Create(w http.ResponseWriter, r *http.Request)
 		broadcastRespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceBroadcast); err != nil {
+		log.Printf("failed to broadcast system-message update: %v", err)
+	}
 	broadcastRespondWithJSON(w, http.StatusCreated, item)
 }
 
@@ -68,6 +80,9 @@ func (h *BroadcastMessageHandler) Update(w http.ResponseWriter, r *http.Request)
 		broadcastRespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceBroadcast); err != nil {
+		log.Printf("failed to broadcast system-message update: %v", err)
+	}
 	broadcastRespondWithJSON(w, http.StatusOK, item)
 }
 
@@ -80,6 +95,9 @@ func (h *BroadcastMessageHandler) Delete(w http.ResponseWriter, r *http.Request)
 	if err := h.service.Delete(id); err != nil {
 		broadcastRespondWithError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceBroadcast); err != nil {
+		log.Printf("failed to broadcast system-message update: %v", err)
 	}
 	broadcastRespondWithJSON(w, http.StatusOK, map[string]string{"message": "broadcast message deleted"})
 }

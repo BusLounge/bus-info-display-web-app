@@ -2,18 +2,31 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
+	"bus-schedule-lounge/internal/database"
 	"bus-schedule-lounge/internal/services"
+	wsupdates "bus-schedule-lounge/internal/websocket"
+
+	"github.com/gorilla/mux"
 )
 
 type RouteHandler struct {
 	routeService *services.RouteService
+	routeRepo    *database.RouteRepository
+	updatesHub   *wsupdates.Hub
 }
 
-func NewRouteHandler(routeService *services.RouteService) *RouteHandler {
+func NewRouteHandler(
+	routeService *services.RouteService,
+	routeRepo *database.RouteRepository,
+	updatesHub *wsupdates.Hub,
+) *RouteHandler {
 	return &RouteHandler{
 		routeService: routeService,
+		routeRepo:    routeRepo,
+		updatesHub:   updatesHub,
 	}
 }
 
@@ -43,7 +56,8 @@ func (h *RouteHandler) GetActiveRoutesWithDetails(w http.ResponseWriter, r *http
 
 // GetRouteByID handles GET /api/routes/{id}
 func (h *RouteHandler) GetRouteByID(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	vars := mux.Vars(r)
+	id := vars["id"]
 	if id == "" {
 		http.Error(w, "route ID is required", http.StatusBadRequest)
 		return
@@ -73,6 +87,10 @@ func (h *RouteHandler) CreateRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceSchedule); err != nil {
+		log.Printf("failed to broadcast schedule update after route creation: %v", err)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(route)
@@ -80,7 +98,8 @@ func (h *RouteHandler) CreateRoute(w http.ResponseWriter, r *http.Request) {
 
 // UpdateRoute handles PUT /api/routes/{id}
 func (h *RouteHandler) UpdateRoute(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	vars := mux.Vars(r)
+	id := vars["id"]
 	if id == "" {
 		http.Error(w, "route ID is required", http.StatusBadRequest)
 		return
@@ -98,13 +117,28 @@ func (h *RouteHandler) UpdateRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loungeIDs, err := h.routeRepo.GetLoungeIDsByMasterRouteID(r.Context(), id)
+	if err != nil {
+		log.Printf("failed to find lounges for updated route %q: %v", id, err)
+	} else {
+		for _, loungeID := range loungeIDs {
+			if _, err := h.updatesHub.Broadcast(wsupdates.Notification{
+				LoungeID: loungeID,
+				Resource: "schedule",
+			}); err != nil {
+				log.Printf("failed to broadcast schedule update for lounge %q: %v", loungeID, err)
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(route)
 }
 
 // DeleteRoute handles DELETE /api/routes/{id}
 func (h *RouteHandler) DeleteRoute(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	vars := mux.Vars(r)
+	id := vars["id"]
 	if id == "" {
 		http.Error(w, "route ID is required", http.StatusBadRequest)
 		return
@@ -114,6 +148,10 @@ func (h *RouteHandler) DeleteRoute(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceSchedule); err != nil {
+		log.Printf("failed to broadcast schedule update after route deletion: %v", err)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

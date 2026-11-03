@@ -412,6 +412,33 @@ func (r *RouteRepository) Update(ctx context.Context, route *models.MasterRoute)
 	return nil
 }
 
+func (r *RouteRepository) GetLoungeIDsByMasterRouteID(ctx context.Context, routeID string) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT DISTINCT lounge_id
+		FROM public.lounge_routes
+		WHERE master_route_id = $1
+	`, routeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query lounge IDs for route %s: %w", routeID, err)
+	}
+	defer rows.Close()
+
+	loungeIDs := make([]string, 0)
+	for rows.Next() {
+		var loungeID string
+		if err := rows.Scan(&loungeID); err != nil {
+			return nil, fmt.Errorf("failed to scan lounge ID for route %s: %w", routeID, err)
+		}
+		loungeIDs = append(loungeIDs, loungeID)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate lounge IDs for route %s: %w", routeID, err)
+	}
+
+	return loungeIDs, nil
+}
+
 func (r *RouteRepository) Delete(ctx context.Context, id string) error {
 	query := `DELETE FROM master_routes WHERE id = $1`
 

@@ -60,7 +60,7 @@
                         <span class="indicator" *ngIf="dep.indicator">●</span>
                         {{ dep.time }}
                       </td>
-                      <td>{{ dep.busNo }}</td>
+                      <td>{{ dep.busNo || 'TBA' }}</td>
                       <td>{{ dep.routeNo }}</td>
                       <td>{{ dep.destination }}</td>
                       <td>
@@ -95,7 +95,7 @@
                         <span class="indicator" *ngIf="arr.indicator">●</span>
                         {{ arr.time }}
                       </td>
-                      <td>{{ arr.busNo }}</td>
+                      <td>{{ arr.busNo || 'TBA' }}</td>
                       <td>{{ arr.routeNo }}</td>
                       <td>{{ arr.origin }}</td>
                       <td>
@@ -153,7 +153,7 @@
                       <span class="indicator" *ngIf="dep.indicator">●</span>
                       {{ dep.time }}
                     </td>
-                    <td>{{ dep.busNo }}</td>
+                    <td>{{ dep.busNo || 'TBA' }}</td>
                     <td>{{ dep.routeNo }}</td>
                     <td>{{ dep.destination }}</td>
                     <td>
@@ -188,7 +188,7 @@
                       <span class="indicator" *ngIf="arr.indicator">●</span>
                       {{ arr.time }}
                     </td>
-                    <td>{{ arr.busNo }}</td>
+                    <td>{{ arr.busNo || 'TBA' }}</td>
                     <td>{{ arr.routeNo }}</td>
                     <td>{{ arr.origin }}</td>
                     <td>
@@ -245,7 +245,7 @@
                       <span class="indicator" *ngIf="dep.indicator">●</span>
                       {{ dep.time }}
                     </td>
-                    <td>{{ dep.busNo }}</td>
+                    <td>{{ dep.busNo || 'TBA' }}</td>
                     <td>{{ dep.routeNo }}</td>
                     <td>{{ dep.destination }}</td>
                     <td>
@@ -280,7 +280,7 @@
                       <span class="indicator" *ngIf="arr.indicator">●</span>
                       {{ arr.time }}
                     </td>
-                    <td>{{ arr.busNo }}</td>
+                    <td>{{ arr.busNo || 'TBA' }}</td>
                     <td>{{ arr.routeNo }}</td>
                     <td>{{ arr.origin }}</td>
                     <td>

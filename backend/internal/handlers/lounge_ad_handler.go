@@ -4,18 +4,27 @@ import (
 	"bus-schedule-lounge/internal/models"
 	"bus-schedule-lounge/internal/services"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
 	"github.com/gorilla/mux"
+	wsupdates "bus-schedule-lounge/internal/websocket"
 )
 
 type LoungeAdHandler struct {
-	service *services.LoungeAdService
+	service    *services.LoungeAdService
+	updatesHub *wsupdates.Hub
 }
 
-func NewLoungeAdHandler(service *services.LoungeAdService) *LoungeAdHandler {
-	return &LoungeAdHandler{service: service}
+func NewLoungeAdHandler(
+	service *services.LoungeAdService,
+	updatesHub *wsupdates.Hub,
+) *LoungeAdHandler {
+	return &LoungeAdHandler{
+		service:    service,
+		updatesHub: updatesHub,
+	}
 }
 
 func (h *LoungeAdHandler) GetAll(w http.ResponseWriter, _ *http.Request) {
@@ -66,6 +75,9 @@ func (h *LoungeAdHandler) Create(w http.ResponseWriter, r *http.Request) {
 		loungeAdRespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceLoungeAds); err != nil {
+		log.Printf("failed to broadcast lounge-ad update after creation: %v", err)
+	}
 	loungeAdRespondWithJSON(w, http.StatusCreated, item)
 }
 
@@ -85,6 +97,9 @@ func (h *LoungeAdHandler) Update(w http.ResponseWriter, r *http.Request) {
 		loungeAdRespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceLoungeAds); err != nil {
+		log.Printf("failed to broadcast lounge-ad update after update: %v", err)
+	}
 	loungeAdRespondWithJSON(w, http.StatusOK, item)
 }
 
@@ -97,6 +112,9 @@ func (h *LoungeAdHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.service.Delete(id); err != nil {
 		loungeAdRespondWithError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceLoungeAds); err != nil {
+		log.Printf("failed to broadcast lounge-ad update after deletion: %v", err)
 	}
 	loungeAdRespondWithJSON(w, http.StatusOK, map[string]string{"message": "lounge ad deleted"})
 }

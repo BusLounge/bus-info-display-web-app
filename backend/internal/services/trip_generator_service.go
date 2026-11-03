@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"bus-schedule-lounge/internal/database"
+	wsupdates "bus-schedule-lounge/internal/websocket"
 )
 
 const defaultTripGeneratorTimezone = "Asia/Colombo"
@@ -17,18 +18,28 @@ const defaultTripGeneratorTimezone = "Asia/Colombo"
 type TripGeneratorRepository interface {
 	ListActiveTripSchedules(context.Context) ([]database.TripSchedule, error)
 	GenerateTrip(context.Context, database.TripSchedule, time.Time, int64) error
+	GetLoungeIDsByBusOwnerRouteID(context.Context, string) ([]string, error)
 }
 
 type TripGeneratorService struct {
 	repository TripGeneratorRepository
 	location   *time.Location
+	updatesHub *wsupdates.Hub
 }
 
-func NewTripGeneratorService(repository TripGeneratorRepository, location *time.Location) *TripGeneratorService {
+func NewTripGeneratorService(
+	repository TripGeneratorRepository,
+	location *time.Location,
+	updatesHub *wsupdates.Hub,
+) *TripGeneratorService {
 	if location == nil {
 		location = time.Local
 	}
-	return &TripGeneratorService{repository: repository, location: location}
+	return &TripGeneratorService{
+		repository: repository,
+		location:   location,
+		updatesHub: updatesHub,
+	}
 }
 
 // GenerateForDate creates all scheduled departures that recur on the given
@@ -62,8 +73,44 @@ func (s *TripGeneratorService) GenerateForDate(ctx context.Context, serviceDate 
 			generationErrors = append(generationErrors, fmt.Errorf("schedule %s: %w", schedule.ID, err))
 			continue
 		}
-		if err := s.repository.GenerateTrip(ctx, schedule, departure, schedule.EstimatedDurationMinutes.Int64); err != nil {
+		if err := s.repository.GenerateTrip(
+			ctx,
+			schedule,
+			departure,
+			schedule.EstimatedDurationMinutes.Int64,
+		); err != nil {
 			generationErrors = append(generationErrors, err)
+			continue
+		}
+
+		if !schedule.BusOwnerRouteID.Valid || schedule.BusOwnerRouteID.String == "" {
+			continue
+		}
+
+		loungeIDs, err := s.repository.GetLoungeIDsByBusOwnerRouteID(
+			ctx,
+			schedule.BusOwnerRouteID.String,
+		)
+		if err != nil {
+			generationErrors = append(generationErrors, fmt.Errorf(
+				"find lounges for bus-owner route %s: %w",
+				schedule.BusOwnerRouteID.String,
+				err,
+			))
+			continue
+		}
+
+		for _, loungeID := range loungeIDs {
+			if _, err := s.updatesHub.Broadcast(wsupdates.Notification{
+				LoungeID: loungeID,
+				Resource: wsupdates.ResourceSchedule,
+			}); err != nil {
+				generationErrors = append(generationErrors, fmt.Errorf(
+					"broadcast schedule update for lounge %s: %w",
+					loungeID,
+					err,
+				))
+			}
 		}
 	}
 	return errors.Join(generationErrors...)

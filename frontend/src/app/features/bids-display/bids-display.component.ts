@@ -974,7 +974,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
 
     this.departures = departuresRaw.map((dep) => ({
       time: this.toDisplayTime(dep.time),
-      busNo: dep.busNo || '-',
+      busNo: dep.busNo || 'TBA',
       routeNo: dep.routeNumber || '-',
       destination: dep.destination || '-',
       remarks: dep.remarks || dep.status || '',
@@ -984,7 +984,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
 
     this.arrivals = arrivalsRaw.map((arr) => ({
       time: this.toDisplayTime(arr.time),
-      busNo: arr.busNo || '-',
+      busNo: arr.busNo || 'TBA',
       routeNo: arr.routeNumber || '-',
       origin: arr.origin || '-',
       remarks: arr.remarks || arr.status || '',

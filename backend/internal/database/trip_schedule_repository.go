@@ -144,6 +144,51 @@ func (r *TripScheduleRepository) GenerateTrip(
 	return nil
 }
 
+func (r *TripScheduleRepository) GetLoungeIDsByBusOwnerRouteID(
+	ctx context.Context,
+	busOwnerRouteID string,
+) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT DISTINCT lr.lounge_id::text
+		FROM public.bus_owner_routes bor
+		JOIN public.lounge_routes lr
+			ON lr.master_route_id = bor.master_route_id
+		WHERE bor.id = $1::uuid
+		ORDER BY lr.lounge_id::text
+	`, busOwnerRouteID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"query lounge IDs for bus-owner route %s: %w",
+			busOwnerRouteID,
+			err,
+		)
+	}
+	defer rows.Close()
+
+	loungeIDs := make([]string, 0)
+	for rows.Next() {
+		var loungeID string
+		if err := rows.Scan(&loungeID); err != nil {
+			return nil, fmt.Errorf(
+				"scan lounge ID for bus-owner route %s: %w",
+				busOwnerRouteID,
+				err,
+			)
+		}
+		loungeIDs = append(loungeIDs, loungeID)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf(
+			"iterate lounge IDs for bus-owner route %s: %w",
+			busOwnerRouteID,
+			err,
+		)
+	}
+
+	return loungeIDs, nil
+}
+
 func nullStringValue(value sql.NullString) string {
 	if !value.Valid {
 		return ""

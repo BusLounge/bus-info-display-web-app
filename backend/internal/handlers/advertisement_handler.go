@@ -16,19 +16,26 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	wsupdates "bus-schedule-lounge/internal/websocket"
 )
 
 type AdvertisementHandler struct {
-	service  *services.AdvertisementService
-	cache    *responseCache
-	mediaDir string
+	service    *services.AdvertisementService
+	cache      *responseCache
+	mediaDir   string
+	updatesHub *wsupdates.Hub
 }
 
-func NewAdvertisementHandler(service *services.AdvertisementService, mediaDir string) *AdvertisementHandler {
+func NewAdvertisementHandler(
+	service *services.AdvertisementService,
+	mediaDir string,
+	updatesHub *wsupdates.Hub,
+) *AdvertisementHandler {
 	return &AdvertisementHandler{
-		service:  service,
-		cache:    newResponseCache(10 * time.Second),
-		mediaDir: mediaDir,
+		service:    service,
+		cache:      newResponseCache(10 * time.Second),
+		mediaDir:   mediaDir,
+		updatesHub: updatesHub,
 	}
 }
 
@@ -280,6 +287,9 @@ func (h *AdvertisementHandler) CreateAdvertisement(w http.ResponseWriter, r *htt
 		return
 	}
 	h.cache.clear()
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceAds); err != nil {
+		log.Printf("failed to broadcast ads update: %v", err)
+	}
 
 	respondWithJSON(w, http.StatusCreated, ad)
 }
@@ -376,6 +386,9 @@ func (h *AdvertisementHandler) UpdateAdvertisement(w http.ResponseWriter, r *htt
 		return
 	}
 	h.cache.clear()
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceAds); err != nil {
+		log.Printf("failed to broadcast ads update: %v", err)
+	}
 
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Advertisement updated successfully"})
 }
@@ -390,6 +403,9 @@ func (h *AdvertisementHandler) DeleteAdvertisement(w http.ResponseWriter, r *htt
 		return
 	}
 	h.cache.clear()
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceAds); err != nil {
+		log.Printf("failed to broadcast ads update: %v", err)
+	}
 
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Advertisement deleted successfully"})
 }
@@ -412,6 +428,9 @@ func (h *AdvertisementHandler) CreateGroup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	h.cache.clear()
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceAds); err != nil {
+		log.Printf("failed to broadcast ads update: %v", err)
+	}
 
 	respondWithJSON(w, http.StatusCreated, group)
 }
@@ -461,6 +480,9 @@ func (h *AdvertisementHandler) UpdateGroup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	h.cache.clear()
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceAds); err != nil {
+		log.Printf("failed to broadcast ads update: %v", err)
+	}
 
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Group updated successfully"})
 }
@@ -475,6 +497,9 @@ func (h *AdvertisementHandler) DeleteGroup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	h.cache.clear()
+	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceAds); err != nil {
+		log.Printf("failed to broadcast ads update: %v", err)
+	}
 
 	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Group deleted successfully"})
 }

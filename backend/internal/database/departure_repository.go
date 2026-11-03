@@ -136,13 +136,14 @@ func (r *DepartureRepository) GetAllLoungeDepartures() ([]models.DepartureInfo, 
 func (r *DepartureRepository) GetDeparturesByLoungeID(loungeID string) ([]models.DepartureInfo, error) {
 	log.Printf("[GetDeparturesByLoungeID] START params: loungeID=%v", loungeID)
 	query := `
+		WITH lounge_schedule AS (
 		SELECT DISTINCT
 			l.id as lounge_id,
 			l.lounge_name,
 			l.latitude as lounge_latitude,
 			l.longitude as lounge_longitude,
-			at.id as active_trip_id,
-			b.bus_number,
+			COALESCE(at.id::text, '') as active_trip_id,
+			COALESCE(b.bus_number, 'Bus TBA') as bus_number,
 			mr.route_number,
 			mr.origin_city,
 			mr.destination_city,
@@ -188,7 +189,7 @@ func (r *DepartureRepository) GetDeparturesByLoungeID(loungeID string) ([]models
 					240
 				) + 20 || ' minutes')::INTERVAL as departure_eta,
 			20 as stopover_minutes,
-			at.status,
+			COALESCE(at.status, 'not_started') as status,
 			st.departure_datetime as trip_departure_datetime
 		FROM lounges l
 		JOIN lounge_routes lr ON l.id = lr.lounge_id
@@ -197,15 +198,19 @@ func (r *DepartureRepository) GetDeparturesByLoungeID(loungeID string) ([]models
 		JOIN master_route_stops sa ON sa.id = lr.stop_after_id AND sa.master_route_id = lr.master_route_id
 		JOIN bus_owner_routes bor ON bor.master_route_id = mr.id
 		JOIN scheduled_trips st ON st.bus_owner_route_id = bor.id
-		JOIN active_trips at ON at.scheduled_trip_id = st.id
-		JOIN buses b ON at.bus_id = b.id
+		LEFT JOIN active_trips at ON at.scheduled_trip_id = st.id
+		LEFT JOIN buses b ON at.bus_id = b.id
 		WHERE l.id = $1 
 			AND l.is_operational = true
 			AND sb.stop_order < sa.stop_order
 			AND DATE(st.departure_datetime) = CURRENT_DATE
-			AND at.status IN ('scheduled', 'pre_departure', 'boarding', 'departed', 'in_transit')
+			AND (at.id IS NULL OR at.status IN ('not_started', 'in_transit', 'at_stop'))
 			AND st.departure_datetime IS NOT NULL
-		ORDER BY departure_eta
+		)
+		SELECT *
+		FROM lounge_schedule
+		WHERE departure_eta >= CURRENT_TIMESTAMP
+		ORDER BY departure_eta ASC
 		LIMIT 10`
 
 	rows, err := r.db.Query(query, loungeID)

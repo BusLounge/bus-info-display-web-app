@@ -123,6 +123,34 @@ func (h *Hub) Broadcast(notification Notification) (int, error) {
 	return delivered, nil
 }
 
+func (h *Hub) BroadcastAll(resource string) (int, error) {
+	resource = strings.ToLower(strings.TrimSpace(resource))
+	if !validResource(resource) {
+		return 0, ErrInvalidNotification
+	}
+
+	h.mu.Lock()
+	loungeIDs := make(map[string]struct{})
+	for client := range h.clients {
+		loungeIDs[client.loungeID] = struct{}{}
+	}
+	h.mu.Unlock()
+
+	delivered := 0
+	for loungeID := range loungeIDs {
+		count, err := h.Broadcast(Notification{
+			LoungeID: loungeID,
+			Resource: resource,
+		})
+		if err != nil {
+			return delivered, err
+		}
+		delivered += count
+	}
+
+	return delivered, nil
+}
+
 func (h *Hub) register(client *Client) {
 	h.mu.Lock()
 	h.clients[client] = struct{}{}

@@ -61,7 +61,7 @@ func (r *ArrivalRepository) GetAllLoungeArrivals() ([]models.ArrivalInfo, error)
 					240
 				) || ' minutes')::INTERVAL as estimated_arrival_time,
 			at.actual_arrival_time,
-			at.status,
+				COALESCE(at.status, 'not_started') as status,
 			st.departure_datetime,
 			COALESCE((
 				SELECT jsonb_agg(jsonb_build_object(
@@ -148,16 +148,17 @@ func (r *ArrivalRepository) GetAllLoungeArrivals() ([]models.ArrivalInfo, error)
 func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.ArrivalInfo, error) {
 	log.Printf("[GetArrivalsByLoungeID] START params: loungeID=%v", loungeID)
 	query := `
+		WITH lounge_schedule AS (
 		SELECT DISTINCT
 			l.id as lounge_id,
 			l.lounge_name,
 			l.latitude as lounge_latitude,
 			l.longitude as lounge_longitude,
-			at.id as active_trip_id,
+			COALESCE(at.id::text, '') as active_trip_id,
 			mr.id as master_route_id,
-			at.bus_id as bus_id,
-			at.driver_id as driver_id,
-			b.bus_number,
+			COALESCE(at.bus_id::text, '') as bus_id,
+			COALESCE(at.driver_id::text, '') as driver_id,
+			COALESCE(b.bus_number, 'Bus TBA') as bus_number,
 			mr.route_number,
 			mr.origin_city,
 			mr.destination_city,
@@ -190,7 +191,7 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.Arr
 					240
 				) || ' minutes')::INTERVAL as estimated_arrival_time,
 			at.actual_arrival_time,
-			at.status,
+				COALESCE(at.status, 'not_started') as status,
 			st.departure_datetime,
 			COALESCE((
 				SELECT jsonb_agg(jsonb_build_object(
@@ -213,15 +214,19 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.Arr
 		JOIN master_route_stops sa ON sa.id = lr.stop_after_id AND sa.master_route_id = lr.master_route_id
 		JOIN bus_owner_routes bor ON bor.master_route_id = mr.id
 		JOIN scheduled_trips st ON st.bus_owner_route_id = bor.id
-		JOIN active_trips at ON at.scheduled_trip_id = st.id
-		JOIN buses b ON at.bus_id = b.id
+		LEFT JOIN active_trips at ON at.scheduled_trip_id = st.id
+		LEFT JOIN buses b ON at.bus_id = b.id
 		WHERE l.id = $1
 			AND l.is_operational = true
 			AND sb.stop_order < sa.stop_order
 			AND DATE(st.departure_datetime) = CURRENT_DATE
-			AND at.status IN ('in_transit', 'at_stop', 'approaching', 'scheduled', 'pre_departure', 'boarding', 'departed')
+			AND (at.id IS NULL OR at.status IN ('not_started', 'in_transit', 'at_stop'))
 			AND st.departure_datetime IS NOT NULL
-		ORDER BY estimated_arrival_time
+		)
+		SELECT *
+		FROM lounge_schedule
+		WHERE estimated_arrival_time >= CURRENT_TIMESTAMP
+		ORDER BY estimated_arrival_time ASC
 		LIMIT 10`
 
 	rows, err := r.db.Query(query, loungeID)
