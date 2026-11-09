@@ -9,6 +9,7 @@ const express = require('express');
 let expressApp;
 let expressServer;
 const EXPRESS_PORT = 4200;
+const DEFAULT_LOCAL_BRIDGE_PORT = 3001;
 
 function getAppResourcePath(...segments) {
   const resourceRoot = app.isPackaged ? process.resourcesPath : __dirname;
@@ -97,6 +98,8 @@ let goProcess;
 let isQuitting = false;
 let goRestartTimer;
 let goRestartAttempts = 0;
+let scheduleWatcher;
+let scheduleWatchDebounce;
 const intentionallyStoppedGoProcesses = new WeakSet();
 const GO_RESTART_BASE_DELAY_MS = 3000;
 const GO_RESTART_MAX_DELAY_MS = 60000;
@@ -133,6 +136,61 @@ function getConfigPath() {
         return path.join(app.getPath('userData'), 'config.json');
     }
     return path.join(__dirname, '..', 'tv-sync-agent-go', 'config.json');
+}
+
+function watchScheduleSnapshot() {
+  if (scheduleWatcher) {
+    scheduleWatcher.close();
+    scheduleWatcher = null;
+  }
+
+  const configPath = getConfigPath();
+  let config;
+
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch (error) {
+    console.error('Could not load config for schedule snapshot watcher:', error);
+    return;
+  }
+
+  const storeDir = typeof config.storeDir === 'string' ? config.storeDir : './local-store';
+  const schedulePath = path.resolve(path.dirname(configPath), storeDir, 'schedule.json');
+  const scheduleDirectory = path.dirname(schedulePath);
+  const scheduleFileName = path.basename(schedulePath);
+
+  try {
+    fs.mkdirSync(scheduleDirectory, { recursive: true });
+
+    scheduleWatcher = fs.watch(scheduleDirectory, (_eventType, filename) => {
+      // Some platforms may not provide a filename; in that case, treat it as a possible update.
+      if (filename && String(filename) !== scheduleFileName) {
+        return;
+      }
+
+      if (scheduleWatchDebounce) {
+        clearTimeout(scheduleWatchDebounce);
+      }
+
+      scheduleWatchDebounce = setTimeout(() => {
+        scheduleWatchDebounce = null;
+
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          return;
+        }
+
+        mainWindow.webContents.send('schedule-snapshot-updated');
+      }, 100);
+    });
+
+    scheduleWatcher.on('error', (error) => {
+      console.error('Schedule snapshot watcher failed:', error);
+      scheduleWatcher?.close();
+      scheduleWatcher = null;
+    });
+  } catch (error) {
+    console.error('Could not watch schedule snapshot directory:', error);
+  }
 }
 
 function scheduleGoProcessRestart(child) {
@@ -259,7 +317,8 @@ function startGoProcess() {
                 apiBaseUrl: "http://18.140.238.163:4000/api",
                 syncFrequencySeconds: 30,
                 displayResolution: "1920x1080",
-                displayOrientation: "landscape"
+                displayOrientation: "landscape",
+                localBridgePort: DEFAULT_LOCAL_BRIDGE_PORT
             };
             fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
         }
@@ -318,7 +377,36 @@ function createMainWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      devTools: false
+    }
+  });
+
+  mainWindow.webContents.on('context-menu', (event) => {
+    event.preventDefault();
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.insertCSS(
+      'html, body, * { cursor: none !important; }'
+    );
+  });
+
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+
+    const key = input.key.toLowerCase();
+    const isAltF4 = key === 'f4' && input.alt;
+    const isCommandQ = key === 'q' && input.meta;
+    const isAdminShortcut =
+      key === 'q' && input.control && input.shift;
+
+    if (isAltF4 || isCommandQ || isAdminShortcut) {
+      event.preventDefault();
+    }
+
+    if (isAdminShortcut && !loginWindow && !adminWindow) {
+      createLoginWindow();
     }
   });
 
@@ -402,6 +490,7 @@ app.on('ready', () => {
     }
   startGoProcess();
     createMainWindow();
+  watchScheduleSnapshot();
 });
 app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') {
@@ -414,6 +503,16 @@ app.on('before-quit', (event) => {
 
   event.preventDefault();
   isQuitting = true;
+
+  if (scheduleWatchDebounce) {
+    clearTimeout(scheduleWatchDebounce);
+    scheduleWatchDebounce = null;
+  }
+
+  if (scheduleWatcher) {
+    scheduleWatcher.close();
+    scheduleWatcher = null;
+  }
 
   Promise.all([stopGoProcess(), stopExpressServer()])
     .catch((error) => console.error('Error during application shutdown:', error))
@@ -466,7 +565,7 @@ ipcMain.handle('bridge:get', async (event, endpoint) => {
             lastBroadcastSync: new Date().toISOString(),
         };
       case 'schedule': {
-        const localBridgePort = Number(config.localBridgePort) || 3000;
+        const localBridgePort = Number(config.localBridgePort) || DEFAULT_LOCAL_BRIDGE_PORT;
         try {
           return await getLocalScheduleSnapshot(localBridgePort);
         } catch (bridgeError) {

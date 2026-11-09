@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
+import { LOCAL_BRIDGE_BASE_URL } from './local-bridge.service';
 
 export interface Advertisement {
   id?: string;
@@ -167,6 +168,13 @@ export class AdvertisementService {
 
   getTVAdsManifest(loungeOrGroup: string): Observable<TVAdManifestItem[]> {
     return this.api.get<TVAdManifestItem[]>(`/tv/ads/${encodeURIComponent(loungeOrGroup)}`, { forceRefresh: true });
+  }
+
+  getLocalMediaUrl(fileName: string): string {
+    const normalizedFileName = (fileName || '').trim().replace(/^\/local\/media\//, '');
+    return normalizedFileName
+      ? `${LOCAL_BRIDGE_BASE_URL}/media/${encodeURIComponent(normalizedFileName)}`
+      : '';
   }
 
   getLoungeAdSlots(loungeId: string): Observable<LoungeAdSlotSummary> {

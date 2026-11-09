@@ -4,40 +4,44 @@ This guide is a deployment example for the Windows account that runs the kiosk. 
 
 ## What the script changes
 
-Run [windows-kiosk-hardening.ps1](windows-kiosk-hardening.ps1) while signed in as the dedicated kiosk user. Its default scope is that user's `HKCU` registry hive:
+Run [windows-kiosk-hardening.ps1](windows-kiosk-hardening.ps1) from an elevated PowerShell session. It resolves the named kiosk account and edits only that account's loaded or offline `NTUSER.DAT` hive; it does not edit the current administrator's profile:
 
 - `Policies\System\DisableTaskMgr = 1` disables Task Manager for that user.
+- `Policies\System\DisableLockWorkstation = 1` removes the Lock Computer option for that user.
+- `Policies\System\DisableRegistryTools = 1` blocks Registry Editor for that user.
 - `Policies\Explorer\NoWinKeys = 1` disables Windows-key shortcut combinations, including normal use of `Win+E`.
 - `Policies\Explorer\NoDrives` hides drive letters in Explorer.
 - `Policies\Explorer\NoViewOnDrive` blocks normal Explorer navigation to drive letters. The example mask `67108863` covers A: through Z:.
+- `Policies\Explorer\NoRun = 1` removes the Run command from the user interface.
 
-These are user-interface restrictions, not a security boundary. They do not prevent access through every alternate program, command line, recovery environment, or another account. `NoDrives` alone only hides drive icons; `NoViewOnDrive` is included as well. The script intentionally does not terminate Explorer because Explorer is also the Windows desktop shell and killing it can leave a user without a desktop or recovery UI.
+These are per-user policy values, not a security boundary. `NoRun`, `NoWinKeys`, `NoDrives`, and `NoViewOnDrive` do not prevent every way to start Explorer or access files. Use Shell Launcher plus tested AppLocker/WDAC policy if the kiosk user must not run Explorer or other unapproved programs. The script intentionally does not terminate Explorer because doing so is not an access-control mechanism and can disrupt Windows recovery.
+
+The script deliberately does not set `HideFastUserSwitching`. The supported **Hide entry points for Fast User Switching** policy is computer-scoped (`HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\HideFastUserSwitching`), so applying it would also affect the local maintenance Administrator. There is no equivalent supported per-user Ctrl+Alt+Del switch-user policy in this script. Keep the maintenance account unrestricted; manage sign-in/session policy through a separately scoped kiosk deployment design if required.
 
 ## Apply
 
-1. Create a dedicated **standard** Windows account for the kiosk. Keep a separate administrator account and recovery credentials.
-2. Sign in as the kiosk account. Run the script in that account's PowerShell session; do not use an elevated prompt belonging to a different administrator account, because `HKCU` would then refer to that administrator's profile.
-3. From the script's directory, run:
+1. Create a dedicated **standard** Windows account for the kiosk. Sign in to it once so Windows creates its profile. Keep a separate administrator account and recovery credentials.
+2. From an elevated PowerShell session, run the script with the kiosk account name. Use `COMPUTER\User` for a local account or `DOMAIN\User` for a domain account:
 
    ```powershell
-   .\windows-kiosk-hardening.ps1 -Mode Apply
+   .\windows-kiosk-hardening.ps1 -Mode Apply -KioskAccount "$env:COMPUTERNAME\KioskUser"
    ```
 
-   The script saves the original values to `%LOCALAPPDATA%\BusInfoDisplay\kiosk-policy-backup.json` before changing them. Store a protected copy of that backup outside the kiosk account as part of deployment recovery.
-4. Sign out and sign back in, or restart, to apply the Explorer restrictions.
-5. Verify the kiosk user cannot launch Task Manager, open Explorer with `Win+E`, or browse local drive letters in Explorer. Separately test your authorized maintenance and recovery procedure.
+   The script saves a SID-bound backup under `%ProgramData%\BusInfoDisplay\KioskPolicy\<SID>.json` before changing values. For an older backup created by the previous version, pass its path explicitly with `-BackupPath`.
+3. Sign out and sign back in, or restart, to apply the restrictions. If the kiosk profile is loaded, the script updates that profile's hive directly; otherwise, it temporarily loads and then unloads the profile hive.
+4. Verify Task Manager, Lock Computer, Registry Editor, Run, Windows-key shortcuts, and drive navigation as the kiosk user. Verify the local Administrator still has the expected maintenance access.
 
 If script execution is blocked, follow your organization's script-signing and execution-policy requirements; do not change the machine-wide execution policy just for this example. A process-scoped policy can be used only where permitted by local policy.
 
 ## Revert
 
-Sign in as the same kiosk account and run:
+From an elevated PowerShell session, target the same kiosk account and run:
 
 ```powershell
-.\windows-kiosk-hardening.ps1 -Mode Revert
+.\windows-kiosk-hardening.ps1 -Mode Revert -KioskAccount "$env:COMPUTERNAME\KioskUser"
 ```
 
-Revert restores the backed-up DWORD values, or removes values that did not exist before Apply. The backup is removed after a successful restore. Sign out and back in or restart. If the account cannot start PowerShell, use a separate administrator/recovery account to restore the kiosk user's registry hive or use your organization's endpoint-management recovery process; do not delete arbitrary Winlogon values.
+Revert restores the backed-up DWORD values, or removes values that did not exist before Apply. The target SID in a current backup must match the requested account. The backup is removed after a successful restore. Sign out and back in or restart. If the account cannot start PowerShell, use a separate administrator/recovery account and the script; do not delete arbitrary Winlogon values.
 
 The script refuses to overwrite an existing backup so repeated runs cannot silently replace the original state. Revert the first run before applying again.
 
@@ -46,11 +50,16 @@ The script refuses to overwrite an existing backup so repeated runs cannot silen
 For managed PCs, prefer policy deployment to hand-editing registry values. In Group Policy, configure the kiosk user's policy:
 
 - **User Configuration > Administrative Templates > System > Ctrl+Alt+Del Options > Remove Task Manager**: Enabled.
+- **User Configuration > Administrative Templates > System > Ctrl+Alt+Del Options > Remove Lock Computer**: Enabled.
+- **User Configuration > Administrative Templates > System > Prevent access to registry editing tools**: Enabled.
 - **User Configuration > Administrative Templates > Windows Components > File Explorer > Turn off Windows+X hotkeys**: Enabled.
 - **User Configuration > Administrative Templates > Windows Components > File Explorer > Hide these specified drives in My Computer**: configure the drives to hide.
 - **User Configuration > Administrative Templates > Windows Components > File Explorer > Prevent access to drives from My Computer**: configure the drives to block in Explorer.
+- **User Configuration > Administrative Templates > Start Menu and Taskbar > Remove Run menu from Start Menu**: Enabled, where present in the installed ADMX templates.
 
-Use the matching policy names available in the target Windows edition and ADMX templates. Apply policy to the kiosk account or its dedicated OU, then sign out/in and verify with `gpresult /r`.
+Use the matching policy names available in the target Windows edition and ADMX templates. Apply the user policy to a dedicated kiosk-user OU or security-filter the GPO to a kiosk-only security group. For a local-only device, use the Group Policy Object Editor's **Browse > Users** option to select the kiosk account rather than Local Computer Policy. Do not select the local Administrator. Sign out/in and verify with `gpresult /r` and by inspecting the kiosk user's effective policy.
+
+**Fast User Switching is different:** **Computer Configuration > Administrative Templates > System > Logon > Hide entry points for Fast User Switching** sets a machine-wide policy. Do not enable it on a shared kiosk/maintenance device if the local Administrator must remain unaffected; do not set `HideFastUserSwitching` under `HKLM` as part of a kiosk-user-only deployment.
 
 ## Stronger kiosk isolation
 
@@ -83,6 +92,73 @@ The project includes [provision-shell-launcher.ps1](provision-shell-launcher.ps1
     Revert restores the saved account assignment, default shell, and enabled state. It deliberately leaves the optional Windows feature installed; remove that feature separately only after confirming no other account or management policy uses it.
 
 The template configures shell selection and exit behavior only. It does not block `Alt+Tab`, `Alt+F4`, the Windows key, or `Ctrl+Alt+Del`. Use edition-supported Keyboard Filter/MDM or Group Policy for approved shortcut restrictions, scope them to the kiosk account, and test each chord on the target Windows image. Do not claim or configure an application-level replacement for Windows secure attention; preserve an administrator recovery path.
+
+### Administrator safety and maintenance access
+
+Both `provision-shell-launcher.ps1` and `windows-kiosk-hardening.ps1` check the supplied `-KioskAccount` against the local **Administrators** group before making changes. If it is an Administrator, the script stops with:
+
+```text
+Error: Kiosk hardening cannot be applied to an Administrator account.
+```
+
+If the membership check cannot be completed, the script also stops rather than proceeding. This guard prevents the scripts from assigning kiosk lockdown to an administrator account; it does not replace checking the account and device configuration during deployment.
+
+To access the maintenance Administrator account:
+
+1. **At boot with AutoLogon enabled:** restart the device and hold **Shift** through startup and the sign-in transition to suppress automatic logon for that boot.
+2. At the Windows sign-in screen, choose **Other user** if needed, then sign in using the separate Administrator credentials. Shift bypasses automatic logon only; it does not authenticate the Administrator.
+3. **From an active kiosk session:** press **Ctrl+Alt+Del**, select **Sign out**, then sign in as the separate Administrator. If the sign-in screen is not shown directly, choose **Other user**.
+
+The per-user restrictions configured by `windows-kiosk-hardening.ps1` apply to the kiosk account, not the Administrator's profile. Shell Launcher assigns the kiosk app to the kiosk account SID and keeps Explorer as the default shell for accounts without a custom assignment. The Administrator should therefore receive the normal Windows desktop and its account-level Task Manager and system access. This is not an unconditional guarantee of unrestricted access: computer-wide Group Policy, Keyboard Filter, AppLocker/WDAC, or other device-management settings can still restrict administrators. Verify the maintenance login on the target device before deployment.
+
+### Configure automatic logon
+
+Configure automatic logon only after the kiosk account and Shell Launcher assignment have been tested with a manual sign-in. Use a dedicated **standard local account** with a unique password. Anyone with physical access to a device configured for automatic logon can reach the kiosk session; protect the device and keep administrator recovery credentials separate.
+
+Microsoft Sysinternals Autologon stores the logon password as an LSA secret rather than in the Winlogon `DefaultPassword` registry value. This is safer than writing the password in plaintext to the registry, but a local administrator can still retrieve the credential. Do not use the tool's command-line form with a password argument: command arguments may be exposed through process inspection, logs, or deployment tooling. Do not put the password in a script, environment variable, command history, answer file, or provisioning log.
+
+1. Download `Autologon.zip` only from the official [Sysinternals Autologon page](https://learn.microsoft.com/sysinternals/downloads/autologon). Extract it to an administrator-controlled tools directory and verify the executable's Authenticode signature:
+
+    ```powershell
+    $tools = 'C:\Tools\Sysinternals\Autologon'
+    New-Item -ItemType Directory -Path $tools -Force | Out-Null
+    $zip = Join-Path $tools 'Autologon.zip'
+    Invoke-WebRequest `
+      -Uri 'https://download.sysinternals.com/files/Autologon.zip' `
+      -OutFile $zip
+    Expand-Archive -LiteralPath $zip -DestinationPath $tools -Force
+
+    $exe = Join-Path $tools 'Autologon64.exe'
+    $signature = Get-AuthenticodeSignature -FilePath $exe
+    if ($signature.Status -ne 'Valid') {
+      throw "Autologon signature validation failed: $($signature.Status)"
+    }
+    $signature | Select-Object Status, @{Name='Signer'; Expression={$_.SignerCertificate.Subject}}
+    ```
+
+    Follow your organization's proxy, software approval, and signature-verification requirements. Use the x86 executable only if the target system requires it.
+2. Launch the signed GUI elevated; the password is entered interactively and is not included in this command:
+
+    ```powershell
+    Start-Process -FilePath $exe -Verb RunAs
+    ```
+
+3. In the Autologon dialog, enter `KioskUser` as the username, the kiosk PC's computer name (shown by `$env:COMPUTERNAME`) as the domain for a local account, and the account password in the password field. For a domain account, use the appropriate domain instead. Select **Enable** and confirm the tool reports that Autologon is configured. Do not select **Enable** for a privileged administrator account.
+4. Reboot for the normal boot test. Expected flow: Windows automatically signs in as the kiosk account; Shell Launcher then starts the assigned `Bus Info Display.exe` as that user instead of starting the Explorer desktop. The app's packaged resources and user-data directories must be accessible to that account.
+5. Test the maintenance override before deployment: restart and hold **Shift** during Windows startup through the sign-in transition to suppress automatic logon for that boot. At the sign-in screen, choose **Other user** (if shown) and enter the separate local Administrator credentials. Shift only bypasses the automatic sign-in; it does not authenticate the administrator or grant access. Timing and keyboards can vary, so validate the procedure on the actual device. Keep a second recovery method (management plane or approved recovery media) in case keyboard filtering or firmware prevents the Shift override.
+6. To disable automatic logon, open the same Autologon GUI elevated and select **Disable**, then perform a reboot test. Prefer the utility's Disable action over manually editing Winlogon values.
+
+After enabling, verify no plaintext `DefaultPassword` value is present without displaying any registry data:
+
+```powershell
+$winlogon = Get-Item -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+if ($winlogon.GetValueNames() -contains 'DefaultPassword') {
+  throw 'A Winlogon DefaultPassword value exists. Disable Autologon and investigate before deployment.'
+}
+'No Winlogon DefaultPassword value is present.'
+```
+
+Treat the autologon configuration as a device secret even when this check passes: Sysinternals stores the password as an LSA secret, which remains accessible to local administrators. Do not export the LSA secret or its registry location into a backup or ticket.
 
 ### Disable only unnecessary functions
 
@@ -143,4 +219,3 @@ Use this sequence on each industrial thin client. Prefer centrally managed provi
 7. Document rollback before rollout: use the administrator or management plane to remove the kiosk user's custom shell assignment or disable Shell Launcher, then reboot and verify the default Explorer shell. Keep installation media and recovery credentials controlled by the device administrator.
 
 Before production deployment, test the packaged installer at its final install path and verify that `resources\bin\agent.exe`, `resources\www`, the writable user-data directory, and the local-store directory all exist and work under the standard kiosk account. Also replace the hard-coded admin credentials in the application before treating the kiosk as secured.
-

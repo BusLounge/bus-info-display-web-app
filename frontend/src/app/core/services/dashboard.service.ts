@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { ApiService } from './api.service';
+import { LOCAL_BRIDGE_BASE_URL } from './local-bridge.service';
 
 export interface DashboardStats {
   todayDepartures: number;
@@ -70,8 +71,6 @@ export interface BroadcastMessageRequest {
 
 @Injectable({ providedIn: 'root' })
 export class DashboardService {
-  private readonly localBridgeBaseUrl = 'http://localhost:3001/local';
-
   constructor(
     private api: ApiService,
     private http: HttpClient
@@ -100,7 +99,7 @@ export class DashboardService {
   setBroadcastsEnabled(enabled: boolean): Observable<{ enabled: boolean }> {
     console.log('[DEBUG] Calling local bridge to set broadcasts enabled:', enabled);
     return this.http.post<{ enabled: boolean }>(
-      `${this.localBridgeBaseUrl}/broadcasts-enabled`,
+      `${LOCAL_BRIDGE_BASE_URL}/broadcasts-enabled`,
       { enabled }
     );
   }
@@ -108,7 +107,7 @@ export class DashboardService {
   getBroadcastsEnabledState(): Observable<{ enabled: boolean }> {
     console.log('[DEBUG] Fetching broadcasts enabled state from local bridge');
     return this.http.get<{ enabled: boolean }>(
-      `${this.localBridgeBaseUrl}/broadcasts-enabled`
+      `${LOCAL_BRIDGE_BASE_URL}/broadcasts-enabled`
     );
   }
 }

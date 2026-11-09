@@ -87,8 +87,18 @@ func (h *RouteHandler) CreateRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.updatesHub.BroadcastAll(wsupdates.ResourceSchedule); err != nil {
-		log.Printf("failed to broadcast schedule update after route creation: %v", err)
+	loungeIDs, err := h.routeRepo.GetLoungeIDsByMasterRouteID(r.Context(), route.ID)
+	if err != nil {
+		log.Printf("failed to find lounges for created route %q: %v", route.ID, err)
+	} else {
+		for _, loungeID := range loungeIDs {
+			if _, err := h.updatesHub.Broadcast(wsupdates.Notification{
+				LoungeID: loungeID,
+				Resource: wsupdates.ResourceSchedule,
+			}); err != nil {
+				log.Printf("failed to broadcast schedule update for lounge %q: %v", loungeID, err)
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

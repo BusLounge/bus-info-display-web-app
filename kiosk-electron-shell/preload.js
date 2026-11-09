@@ -12,5 +12,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
   getAds: () => ipcRenderer.invoke('bridge:get-ads'),
   getBroadcasts: () => ipcRenderer.invoke('bridge:get-broadcasts'),
-  getLoungeAds: () => ipcRenderer.invoke('bridge:get-lounge-ads')
+  getLoungeAds: () => ipcRenderer.invoke('bridge:get-lounge-ads'),
+  onScheduleSnapshotUpdated: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('schedule-snapshot-updated', listener);
+    return () => ipcRenderer.removeListener('schedule-snapshot-updated', listener);
+  }
 });

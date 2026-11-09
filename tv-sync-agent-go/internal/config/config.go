@@ -56,7 +56,7 @@ func Load(path string) (models.Config, error) {
 	}
 
 	if cfg.LocalBridgePort == 0 {
-		cfg.LocalBridgePort = 3000
+		cfg.LocalBridgePort = 3001
 	}
 	if cfg.RequestTimeoutMs == 0 {
 		cfg.RequestTimeoutMs = 10000

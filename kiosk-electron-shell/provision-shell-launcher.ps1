@@ -26,6 +26,44 @@ if (-not $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Adm
 $kioskSid = ([System.Security.Principal.NTAccount]$KioskAccount).Translate(
     [System.Security.Principal.SecurityIdentifier]
 ).Value
+
+function Test-LocalAdministratorsMembership {
+    param([Parameter(Mandatory = $true)][string]$Sid)
+
+    $context = $null
+    $adminGroup = $null
+    try {
+        Add-Type -AssemblyName System.DirectoryServices.AccountManagement -ErrorAction Stop
+        $context = [System.DirectoryServices.AccountManagement.PrincipalContext]::new(
+            [System.DirectoryServices.AccountManagement.ContextType]::Machine
+        )
+        $adminGroup = [System.DirectoryServices.AccountManagement.GroupPrincipal]::FindByIdentity(
+            $context,
+            [System.DirectoryServices.AccountManagement.IdentityType]::Sid,
+            'S-1-5-32-544'
+        )
+        if (-not $adminGroup) {
+            throw 'The local Administrators group could not be resolved.'
+        }
+
+        foreach ($member in $adminGroup.GetMembers($true)) {
+            if ($member.Sid -and $member.Sid.Value -eq $Sid) {
+                return $true
+            }
+        }
+        return $false
+    } catch {
+        throw "Unable to verify whether '$KioskAccount' is a local Administrator: $($_.Exception.Message)"
+    } finally {
+        if ($adminGroup) { $adminGroup.Dispose() }
+        if ($context) { $context.Dispose() }
+    }
+}
+
+if (Test-LocalAdministratorsMembership -Sid $kioskSid) {
+    throw 'Error: Kiosk hardening cannot be applied to an Administrator account.'
+}
+
 $backupPath = Join-Path $backupRoot "$kioskSid.json"
 
 try {

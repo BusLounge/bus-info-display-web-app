@@ -15,6 +15,7 @@ interface KioskAdvertisement {
   id: string;
   name: string;
   mediaUrl: string;
+  fallbackMediaUrl?: string;
   mediaType: 'image' | 'video';
   durationMs: number;
   nextPlayAt?: string;
@@ -26,6 +27,7 @@ interface KioskLoungeAd {
   id: string;
   name: string;
   mediaUrl: string;
+  fallbackMediaUrl?: string;
   mediaType: 'image' | 'video';
   durationMs: number;
   isLocalCreated: boolean;
@@ -157,7 +159,6 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
   private trafficLevelService = inject(TrafficLevelService);
   private adLogger = inject(AdPlaybackLoggerService);
   private advertisementService = inject(AdvertisementService);
-  private readonly localBridgeBaseUrl = 'http://localhost:3001/local';
   private networkStatusCheckInterval: any;
   private scheduleRefreshMs = 30000;
   private adsRefreshMs = 60000;
@@ -201,6 +202,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
   private loopAdInterval: any; // For looping ads in split screen or ads-only mode
   private adPlaybackTimeout: any;
   private paramsSub?: Subscription;
+  private cleanupScheduleSnapshotUpdated?: () => void;
   private playedScheduleKeys = new Set<string>();
   private initialAdsLoaded: boolean = false;
   private lastKnownBroadcastSync: string = '';
@@ -311,6 +313,12 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       window.addEventListener('online', this.handleOnlineStatusChange);
       window.addEventListener('offline', this.handleOnlineStatusChange);
       this.networkStatusCheckInterval = window.setInterval(() => this.updateInternetConnectionStatus(), 10000);
+      if (window.electronAPI?.onScheduleSnapshotUpdated) {
+        this.cleanupScheduleSnapshotUpdated =
+          window.electronAPI.onScheduleSnapshotUpdated(() => {
+            this.fetchSchedule();
+          });
+      }
     }
 
     this.paramsSub = this.route.queryParams.subscribe(params => {
@@ -392,6 +400,8 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
     if (this.adPlaybackTimeout) {
       clearTimeout(this.adPlaybackTimeout);
     }
+    this.cleanupScheduleSnapshotUpdated?.();
+    this.cleanupScheduleSnapshotUpdated = undefined;
     this.paramsSub?.unsubscribe();
   }
 
@@ -895,7 +905,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
 
     if (trimmed.startsWith('/local/media/')) {
       const fileName = trimmed.slice('/local/media/'.length);
-      return `${this.localBridgeBaseUrl}/media/${encodeURIComponent(fileName)}`;
+      return this.advertisementService.getLocalMediaUrl(fileName);
     }
 
     return this.toAbsoluteMediaUrl(trimmed);
@@ -1032,9 +1042,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
           })
           .map((item, index) => {
             const mediaType = this.inferMediaType(item.mediaType, item.mediaUrl || '');
-            const absoluteMediaUrl = item.localFile
-              ? `${this.localBridgeBaseUrl}/media/${encodeURIComponent(item.localFile)}`
-              : this.toAbsoluteMediaUrl(item.mediaUrl || '');
+            const { mediaUrl: absoluteMediaUrl, fallbackMediaUrl } = this.resolveCompanyAdMedia(item);
 
             if (mediaType === 'video' && absoluteMediaUrl.toLowerCase().endsWith('.avi')) {
               skippedAvi += 1;
@@ -1045,6 +1053,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
               id: item.id || `ad-${index}`,
               name: item.name || 'Advertisement',
               mediaUrl: absoluteMediaUrl,
+              fallbackMediaUrl,
               mediaType,
               durationMs: this.resolveAdDurationMs(undefined),
               nextPlayAt: (item.nextPlayAt || '').trim() || undefined,
@@ -1230,9 +1239,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
           })
           .map((item, index) => {
             const mediaType = this.inferMediaType(item.mediaType, item.mediaUrl || '');
-            const absoluteMediaUrl = item.localFile
-              ? `${this.localBridgeBaseUrl}/media/${encodeURIComponent(item.localFile)}`
-              : this.toAbsoluteMediaUrl(item.mediaUrl || '');
+            const { mediaUrl: absoluteMediaUrl, fallbackMediaUrl } = this.resolveCompanyAdMedia(item);
 
             if (mediaType === 'video' && absoluteMediaUrl.toLowerCase().endsWith('.avi')) {
               skippedAvi += 1;
@@ -1243,6 +1250,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
               id: item.id || `ad-${index}`,
               name: item.name || 'Advertisement',
               mediaUrl: absoluteMediaUrl,
+              fallbackMediaUrl,
               mediaType,
               durationMs: this.resolveAdDurationMs(undefined),
               nextPlayAt: (item.nextPlayAt || '').trim() || undefined,
@@ -1935,16 +1943,71 @@ private startAdvertisementPlayback(ad: KioskAdvertisement) {
   }
 
   onAdVideoError(ad: KioskAdvertisement | KioskLoungeAd) {
-    this.adError = `Video playback failed for ${ad.name}. Prefer MP4 (H.264/AAC).`;
+    if (ad.fallbackMediaUrl && ad.mediaUrl !== ad.fallbackMediaUrl) {
+      console.warn(`[AD_MEDIA] Local media failed for ${ad.name}; trying remote media fallback.`);
+      ad.mediaUrl = ad.fallbackMediaUrl;
+      ad.fallbackMediaUrl = undefined;
+      return;
+    }
+
+    console.error(`[AD_MEDIA] Video playback failed for ${ad.name}; skipping this advertisement.`);
+    this.adError = `Video playback failed for ${ad.name}. Skipping this advertisement.`;
+    const wasSplitScreenAd = this.currentSplitScreenAd?.id === ad.id;
+    const wasCurrentAd = this.currentlyPlayingAd?.id === ad.id;
+    const wasAlternateAd = this.currentAlternateAd?.id === ad.id;
     this.advertisements = this.advertisements.filter(item => item.id !== ad.id);
     this.loungeSpecificAds = this.loungeSpecificAds.filter(item => item.id !== ad.id);
-    if (this.currentlyPlayingAd?.id === ad.id) {
+    this.alternateAdQueue = this.alternateAdQueue.filter(item => item.ad.id !== ad.id);
+    if (this.lastKnownAd?.id === ad.id) {
+      this.lastKnownAd = null;
+    }
+    if (wasCurrentAd || wasAlternateAd) {
+      if (this.adPlaybackTimeout) {
+        clearTimeout(this.adPlaybackTimeout);
+        this.adPlaybackTimeout = undefined;
+      }
+    }
+    if (wasCurrentAd) {
       this.stopAdvertisementPlayback();
     }
-    if (this.currentAlternateAd?.id === ad.id) {
+    if (wasSplitScreenAd) {
+      this.currentSplitScreenAd = null;
+    }
+    if (wasAlternateAd) {
       this.currentAlternateAd = null;
+      this.isAdPlaying = false;
+      if (this.isAlternateAdPhase) {
+        this.playNextAlternateAd();
+      }
+    }
+    if (this.shouldLoopAds && (wasSplitScreenAd || wasCurrentAd)) {
+      this.updateLoopingAd();
+    } else if (wasCurrentAd) {
+      this.tryStartScheduledAdvertisement();
     }
     this.updateDebugState();
+  }
+
+  private resolveCompanyAdMedia(item: { localFile?: string; mediaUrl?: string }): {
+    mediaUrl: string;
+    fallbackMediaUrl?: string;
+  } {
+    const sourceMediaUrl = (item.mediaUrl || '').trim();
+    const localFile = (item.localFile || '').trim() ||
+      (sourceMediaUrl.startsWith('/local/media/')
+        ? sourceMediaUrl.slice('/local/media/'.length)
+        : '');
+    const mediaUrl = localFile
+      ? this.advertisementService.getLocalMediaUrl(localFile)
+      : this.toAbsoluteMediaUrl(sourceMediaUrl);
+    const fallbackMediaUrl = localFile && sourceMediaUrl && !sourceMediaUrl.startsWith('/local/media/')
+      ? this.toAbsoluteMediaUrl(sourceMediaUrl)
+      : undefined;
+
+    return {
+      mediaUrl,
+      fallbackMediaUrl: fallbackMediaUrl !== mediaUrl ? fallbackMediaUrl : undefined,
+    };
   }
 
   private toAbsoluteMediaUrl(mediaUrl: string): string {
