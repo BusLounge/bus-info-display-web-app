@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 )
 
 type DepartureRepository struct {
@@ -16,7 +17,9 @@ func NewDepartureRepository(db *sql.DB) *DepartureRepository {
 }
 
 // GetAllLoungeDepartures gets today's active trip departures for all lounges from actual database tables
-func (r *DepartureRepository) GetAllLoungeDepartures() ([]models.DepartureInfo, error) {
+func (r *DepartureRepository) GetAllLoungeDepartures(
+	serviceDateStart, serviceDateEnd time.Time,
+) ([]models.DepartureInfo, error) {
 	query := `
 		SELECT DISTINCT
 			l.id as lounge_id,
@@ -83,13 +86,18 @@ func (r *DepartureRepository) GetAllLoungeDepartures() ([]models.DepartureInfo, 
 		JOIN buses b ON at.bus_id = b.id
 		WHERE l.is_operational = true
 			AND sb.stop_order < sa.stop_order
-			AND DATE(st.departure_datetime) = CURRENT_DATE
+			AND st.departure_datetime >= $1::timestamp
+			AND st.departure_datetime < $2::timestamp
 			AND at.status IN ('scheduled', 'pre_departure', 'boarding', 'departed', 'in_transit')
 			AND st.departure_datetime IS NOT NULL
 		ORDER BY l.lounge_name, departure_eta
 		LIMIT 50`
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.Query(
+		query,
+		serviceDateStart.Format("2006-01-02 15:04:05.999999999"),
+		serviceDateEnd.Format("2006-01-02 15:04:05.999999999"),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching departures: %w", err)
 	}
@@ -133,7 +141,10 @@ func (r *DepartureRepository) GetAllLoungeDepartures() ([]models.DepartureInfo, 
 }
 
 // GetDeparturesByLoungeID gets today's active trip departures for a specific lounge from actual database tables
-func (r *DepartureRepository) GetDeparturesByLoungeID(loungeID string) ([]models.DepartureInfo, error) {
+func (r *DepartureRepository) GetDeparturesByLoungeID(
+	loungeID string,
+	serviceDateStart, serviceDateEnd time.Time,
+) ([]models.DepartureInfo, error) {
 	log.Printf("[GetDeparturesByLoungeID] START params: loungeID=%v", loungeID)
 	query := `
 		WITH lounge_schedule AS (
@@ -203,17 +214,22 @@ func (r *DepartureRepository) GetDeparturesByLoungeID(loungeID string) ([]models
 		WHERE l.id = $1 
 			AND l.is_operational = true
 			AND sb.stop_order < sa.stop_order
-			AND DATE(st.departure_datetime) = CURRENT_DATE
+			AND st.departure_datetime >= $2::timestamp
+			AND st.departure_datetime < $3::timestamp
 			AND (at.id IS NULL OR at.status IN ('not_started', 'in_transit', 'at_stop'))
 			AND st.departure_datetime IS NOT NULL
 		)
 		SELECT *
 		FROM lounge_schedule
-		WHERE departure_eta >= CURRENT_TIMESTAMP
 		ORDER BY departure_eta ASC
 		LIMIT 10`
 
-	rows, err := r.db.Query(query, loungeID)
+	rows, err := r.db.Query(
+		query,
+		loungeID,
+		serviceDateStart.Format("2006-01-02 15:04:05.999999999"),
+		serviceDateEnd.Format("2006-01-02 15:04:05.999999999"),
+	)
 	if err != nil {
 		log.Printf("[GetDeparturesByLoungeID] QUERY ERROR: %v", err)
 		return nil, fmt.Errorf("error fetching departures for lounge: %w", err)

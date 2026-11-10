@@ -61,8 +61,13 @@
 .lounges-container {
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: 0 32px 32px 32px;
+  gap: 16px;
+  padding: 0 32px 24px 32px;
+  max-height: 65vh;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .page-subtitle {
@@ -76,7 +81,8 @@
 .lounge-section {
   background: #ffffff;
   border-radius: 16px;
-  padding: 24px;
+  padding: 16px;
+  flex: 0 0 auto;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
   border: 1px solid rgba(37, 99, 235, 0.08);
   transition: all 0.3s ease;
@@ -90,7 +96,7 @@
 .lounge-title {
   font-size: 1.1rem;
   font-weight: 800;
-  margin-bottom: 16px;
+  margin: 0 0 10px;
   color: #1e293b;
   letter-spacing: 0.8px;
   text-transform: uppercase;
@@ -100,9 +106,8 @@
 }
 
 .table-wrapper {
-  overflow-x: hidden;
+  overflow-x: auto;
   border-radius: 12px;
-  margin-top: 16px;
 }
 
 .arrivals-table {
@@ -115,10 +120,10 @@
     color: rgb(11, 11, 11);
 
     th {
-      padding: 16px 20px;
+      padding: 10px 12px;
       text-align: left;
       font-weight: 700;
-      font-size: 1rem;
+      font-size: 0.85rem;
       letter-spacing: 1px;
       text-transform: uppercase;
 
@@ -164,9 +169,9 @@
       }
 
       td {
-        padding: 16px 20px;
+        padding: 9px 12px;
         color: #334155;
-        font-size: 1.1rem;
+        font-size: 0.95rem;
         border-bottom: 1px solid #e2e8f0;
         font-weight: 500;
 
@@ -239,12 +244,12 @@
     font-size: 0.85rem;
 
     th, td {
-      padding: 12px 14px;
+      padding: 8px 10px;
     }
   }
 
   .lounge-section {
-    padding: 16px;
+    padding: 12px;
   }
 }
 

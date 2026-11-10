@@ -8,16 +8,21 @@ import (
 )
 
 type DepartureService struct {
-	repo *database.DepartureRepository
+	repo     *database.DepartureRepository
+	location *time.Location
 }
 
-func NewDepartureService(repo *database.DepartureRepository) *DepartureService {
-	return &DepartureService{repo: repo}
+func NewDepartureService(repo *database.DepartureRepository, location *time.Location) *DepartureService {
+	return &DepartureService{repo: repo, location: location}
 }
 
 // GetAllLoungeDepartures gets departures for all lounges with calculated remarks
 func (s *DepartureService) GetAllLoungeDepartures() ([]models.LoungeDepartureResponse, error) {
-	departures, err := s.repo.GetAllLoungeDepartures()
+	start, end, err := currentServiceDayBounds(time.Now(), s.location)
+	if err != nil {
+		return nil, err
+	}
+	departures, err := s.repo.GetAllLoungeDepartures(start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +36,11 @@ func (s *DepartureService) GetAllLoungeDepartures() ([]models.LoungeDepartureRes
 
 // GetDeparturesByLoungeID gets departures for a specific lounge with calculated remarks
 func (s *DepartureService) GetDeparturesByLoungeID(loungeID string) (*models.LoungeDepartureResponse, error) {
-	departures, err := s.repo.GetDeparturesByLoungeID(loungeID)
+	start, end, err := currentServiceDayBounds(time.Now(), s.location)
+	if err != nil {
+		return nil, err
+	}
+	departures, err := s.repo.GetDeparturesByLoungeID(loungeID, start, end)
 	if err != nil {
 		return nil, err
 	}

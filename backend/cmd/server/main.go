@@ -56,12 +56,12 @@ func main() {
 
 	// Arrival Management
 	arrivalRepo := database.NewArrivalRepository(db.DB)
-	arrivalService := services.NewArrivalService(arrivalRepo, cfg.ETAProfiles)
+	arrivalService := services.NewArrivalService(arrivalRepo, tripGeneratorLocation, cfg.ETAProfiles)
 	arrivalHandler := handlers.NewArrivalHandler(arrivalService)
 
 	// Departure Management
 	departureRepo := database.NewDepartureRepository(db.DB)
-	departureService := services.NewDepartureService(departureRepo)
+	departureService := services.NewDepartureService(departureRepo, tripGeneratorLocation)
 	departureHandler := handlers.NewDepartureHandler(departureService)
 
 	// Lounge Management

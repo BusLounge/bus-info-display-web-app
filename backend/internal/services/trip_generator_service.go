@@ -62,9 +62,10 @@ func (s *TripGeneratorService) GenerateForDate(ctx context.Context, serviceDate 
 		if !runs {
 			continue
 		}
-		if !schedule.EstimatedDurationMinutes.Valid || schedule.EstimatedDurationMinutes.Int64 <= 0 {
+		durationMinutes, ok := scheduleDurationMinutes(schedule)
+		if !ok {
 			generationErrors = append(generationErrors, fmt.Errorf(
-				"schedule %s has no positive estimated_duration_minutes", schedule.ID))
+				"schedule %s has no positive estimated_duration_minutes on the schedule or its route", schedule.ID))
 			continue
 		}
 
@@ -77,7 +78,7 @@ func (s *TripGeneratorService) GenerateForDate(ctx context.Context, serviceDate 
 			ctx,
 			schedule,
 			departure,
-			schedule.EstimatedDurationMinutes.Int64,
+			durationMinutes,
 		); err != nil {
 			generationErrors = append(generationErrors, err)
 			continue
@@ -114,6 +115,16 @@ func (s *TripGeneratorService) GenerateForDate(ctx context.Context, serviceDate 
 		}
 	}
 	return errors.Join(generationErrors...)
+}
+
+func scheduleDurationMinutes(schedule database.TripSchedule) (int64, bool) {
+	if schedule.EstimatedDurationMinutes.Valid && schedule.EstimatedDurationMinutes.Int64 > 0 {
+		return schedule.EstimatedDurationMinutes.Int64, true
+	}
+	if schedule.RouteEstimatedDurationMinutes.Valid && schedule.RouteEstimatedDurationMinutes.Int64 > 0 {
+		return schedule.RouteEstimatedDurationMinutes.Int64, true
+	}
+	return 0, false
 }
 
 // Run immediately generates trips for today, then schedules future runs at

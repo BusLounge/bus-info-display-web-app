@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
+	"time"
 )
 
 type ArrivalRepository struct {
@@ -17,7 +19,9 @@ func NewArrivalRepository(db *sql.DB) *ArrivalRepository {
 }
 
 // GetAllLoungeArrivals gets today's active trip arrivals for all lounges from actual database tables
-func (r *ArrivalRepository) GetAllLoungeArrivals() ([]models.ArrivalInfo, error) {
+func (r *ArrivalRepository) GetAllLoungeArrivals(
+	serviceDateStart, serviceDateEnd time.Time,
+) ([]models.ArrivalInfo, error) {
 	query := `
 		SELECT DISTINCT
 			l.id as lounge_id,
@@ -88,13 +92,18 @@ func (r *ArrivalRepository) GetAllLoungeArrivals() ([]models.ArrivalInfo, error)
 		JOIN buses b ON at.bus_id = b.id
 		WHERE l.is_operational = true
 			AND sb.stop_order < sa.stop_order
-			AND DATE(st.departure_datetime) = CURRENT_DATE
+			AND st.departure_datetime >= $1::timestamp
+			AND st.departure_datetime < $2::timestamp
 			AND at.status IN ('in_transit', 'at_stop', 'approaching', 'scheduled', 'pre_departure', 'boarding', 'departed')
 			AND st.departure_datetime IS NOT NULL
 		ORDER BY l.lounge_name, estimated_arrival_time
 		LIMIT 50`
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.Query(
+		query,
+		serviceDateStart.Format("2006-01-02 15:04:05.999999999"),
+		serviceDateEnd.Format("2006-01-02 15:04:05.999999999"),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching arrivals: %w", err)
 	}
@@ -134,6 +143,11 @@ func (r *ArrivalRepository) GetAllLoungeArrivals() ([]models.ArrivalInfo, error)
 		if err := json.Unmarshal(routeSegmentsJSON, &arrival.RouteSegments); err != nil {
 			return nil, fmt.Errorf("error decoding route segments for route %s: %w", arrival.MasterRouteID, err)
 		}
+		arrival.RouteSegments = truncateRouteSegmentsAtLounge(
+			arrival.RouteSegments,
+			arrival.LoungeLat,
+			arrival.LoungeLng,
+		)
 		arrivals = append(arrivals, arrival)
 	}
 
@@ -145,7 +159,10 @@ func (r *ArrivalRepository) GetAllLoungeArrivals() ([]models.ArrivalInfo, error)
 }
 
 // GetArrivalsByLoungeID gets today's active trip arrivals for a specific lounge from actual database tables
-func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.ArrivalInfo, error) {
+func (r *ArrivalRepository) GetArrivalsByLoungeID(
+	loungeID string,
+	serviceDateStart, serviceDateEnd time.Time,
+) ([]models.ArrivalInfo, error) {
 	log.Printf("[GetArrivalsByLoungeID] START params: loungeID=%v", loungeID)
 	query := `
 		WITH lounge_schedule AS (
@@ -219,17 +236,22 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.Arr
 		WHERE l.id = $1
 			AND l.is_operational = true
 			AND sb.stop_order < sa.stop_order
-			AND DATE(st.departure_datetime) = CURRENT_DATE
+			AND st.departure_datetime >= $2::timestamp
+			AND st.departure_datetime < $3::timestamp
 			AND (at.id IS NULL OR at.status IN ('not_started', 'in_transit', 'at_stop'))
 			AND st.departure_datetime IS NOT NULL
 		)
 		SELECT *
 		FROM lounge_schedule
-		WHERE estimated_arrival_time >= CURRENT_TIMESTAMP
 		ORDER BY estimated_arrival_time ASC
 		LIMIT 10`
 
-	rows, err := r.db.Query(query, loungeID)
+	rows, err := r.db.Query(
+		query,
+		loungeID,
+		serviceDateStart.Format("2006-01-02 15:04:05.999999999"),
+		serviceDateEnd.Format("2006-01-02 15:04:05.999999999"),
+	)
 	if err != nil {
 		log.Printf("[GetArrivalsByLoungeID] QUERY ERROR: %v", err)
 		return nil, fmt.Errorf("error fetching arrivals for lounge %s: %w", loungeID, err)
@@ -270,6 +292,11 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.Arr
 		if err := json.Unmarshal(routeSegmentsJSON, &arrival.RouteSegments); err != nil {
 			return nil, fmt.Errorf("error decoding route segments for route %s: %w", arrival.MasterRouteID, err)
 		}
+		arrival.RouteSegments = truncateRouteSegmentsAtLounge(
+			arrival.RouteSegments,
+			arrival.LoungeLat,
+			arrival.LoungeLng,
+		)
 		arrivals = append(arrivals, arrival)
 	}
 
@@ -279,4 +306,68 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(loungeID string) ([]models.Arr
 
 	log.Printf("[GetArrivalsByLoungeID] RESULT: %d rows", len(arrivals))
 	return arrivals, nil
+}
+
+func truncateRouteSegmentsAtLounge(
+	segments []models.RouteSegment,
+	loungeLat, loungeLng *float64,
+) []models.RouteSegment {
+	if len(segments) == 0 || loungeLat == nil || loungeLng == nil ||
+		math.IsNaN(*loungeLat) || math.IsInf(*loungeLat, 0) ||
+		math.IsNaN(*loungeLng) || math.IsInf(*loungeLng, 0) ||
+		*loungeLat < -90 || *loungeLat > 90 || *loungeLng < -180 || *loungeLng > 180 {
+		return nil
+	}
+
+	cosLatitude := math.Cos(*loungeLat * math.Pi / 180)
+	targetX := *loungeLng * 111.32 * cosLatitude
+	targetY := *loungeLat * 110.574
+	bestDistance := math.Inf(1)
+	bestIndex := -1
+	bestFraction := 0.0
+	bestX, bestY := 0.0, 0.0
+
+	for index, segment := range segments {
+		if segment.DistanceKM <= 0 || math.IsNaN(segment.DistanceKM) || math.IsInf(segment.DistanceKM, 0) {
+			continue
+		}
+
+		startX := segment.StartLongitude * 111.32 * cosLatitude
+		startY := segment.StartLatitude * 110.574
+		endX := segment.EndLongitude * 111.32 * cosLatitude
+		endY := segment.EndLatitude * 110.574
+		deltaX := endX - startX
+		deltaY := endY - startY
+		lengthSquared := deltaX*deltaX + deltaY*deltaY
+		if lengthSquared == 0 || math.IsNaN(lengthSquared) || math.IsInf(lengthSquared, 0) {
+			continue
+		}
+
+		fraction := ((targetX-startX)*deltaX + (targetY-startY)*deltaY) / lengthSquared
+		fraction = math.Max(0, math.Min(fraction, 1))
+		projectedX := startX + fraction*deltaX
+		projectedY := startY + fraction*deltaY
+		distance := math.Hypot(targetX-projectedX, targetY-projectedY)
+		if distance < bestDistance {
+			bestDistance = distance
+			bestIndex = index
+			bestFraction = fraction
+			bestX = projectedX
+			bestY = projectedY
+		}
+	}
+
+	if bestIndex < 0 {
+		return nil
+	}
+
+	prefix := append([]models.RouteSegment(nil), segments[:bestIndex]...)
+	if bestFraction > 0 {
+		lastSegment := segments[bestIndex]
+		lastSegment.DistanceKM *= bestFraction
+		lastSegment.EndLongitude = bestX / (111.32 * cosLatitude)
+		lastSegment.EndLatitude = bestY / 110.574
+		prefix = append(prefix, lastSegment)
+	}
+	return prefix
 }

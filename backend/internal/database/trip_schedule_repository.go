@@ -22,7 +22,8 @@ type TripSchedule struct {
 	BusOwnerRouteID          sql.NullString
 	RecurrenceDays           sql.NullString
 	SpecificDates            sql.NullString
-	EstimatedDurationMinutes sql.NullInt64
+	EstimatedDurationMinutes     sql.NullInt64
+	RouteEstimatedDurationMinutes sql.NullInt64
 }
 
 type TripScheduleRepository struct {
@@ -48,8 +49,11 @@ func (r *TripScheduleRepository) ListActiveTripSchedules(ctx context.Context) ([
 			ts.bus_owner_route_id::text,
 			ts.recurrence_days,
 			ts.specific_dates,
-			ts.estimated_duration_minutes
+			ts.estimated_duration_minutes,
+			mr.estimated_duration_minutes
 		FROM public.trip_schedules ts
+		LEFT JOIN public.bus_owner_routes bor ON bor.id = ts.bus_owner_route_id
+		LEFT JOIN public.master_routes mr ON mr.id = bor.master_route_id
 		WHERE ts.is_active IS TRUE
 		ORDER BY ts.id
 	`)
@@ -75,6 +79,7 @@ func (r *TripScheduleRepository) ListActiveTripSchedules(ctx context.Context) ([
 			&schedule.RecurrenceDays,
 			&schedule.SpecificDates,
 			&schedule.EstimatedDurationMinutes,
+			&schedule.RouteEstimatedDurationMinutes,
 		); err != nil {
 			return nil, fmt.Errorf("scan active trip schedule: %w", err)
 		}

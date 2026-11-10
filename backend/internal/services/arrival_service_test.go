@@ -86,3 +86,33 @@ func TestCalculateSegmentBasedETAReturnsNoRouteWhenTargetIsBehindBus(t *testing.
 		t.Fatal("calculateSegmentBasedETA() found a forward route to a target behind the bus")
 	}
 }
+
+func TestCalculateRoadTypeRouteDurationUsesSegmentProfiles(t *testing.T) {
+	segments := []models.RouteSegment{
+		{DistanceKM: 10, RoadType: "HIGHWAY"},
+		{DistanceKM: 10, RoadType: "RURAL"},
+	}
+	profiles := map[string]float64{
+		"HIGHWAY": 0.8,
+		"RURAL":   2,
+	}
+
+	duration, ok := calculateRoadTypeRouteDuration(segments, profiles)
+	if !ok {
+		t.Fatal("calculateRoadTypeRouteDuration() did not calculate a route duration")
+	}
+	if got, want := duration.Minutes(), 42.0; math.Abs(got-want) > 0.001 {
+		t.Errorf("duration = %v minutes, want %v", got, want)
+	}
+}
+
+func TestCalculateRoadTypeRouteDurationFallsBackWhenAllRoadTypesUnknown(t *testing.T) {
+	segments := []models.RouteSegment{
+		{DistanceKM: 10, RoadType: "UNKNOWN"},
+	}
+	profiles := map[string]float64{"UNKNOWN": 1}
+
+	if _, ok := calculateRoadTypeRouteDuration(segments, profiles); ok {
+		t.Fatal("calculateRoadTypeRouteDuration() accepted a route with no known road types")
+	}
+}

@@ -39,12 +39,17 @@ type BatchETAResponseItem struct {
 }
 
 type ArrivalService struct {
-	repo       *database.ArrivalRepository
+	repo        *database.ArrivalRepository
 	etaProfiles map[string]float64
+	location    *time.Location
 }
 
-func NewArrivalService(repo *database.ArrivalRepository, etaProfiles ...map[string]float64) *ArrivalService {
-	service := &ArrivalService{repo: repo}
+func NewArrivalService(
+	repo *database.ArrivalRepository,
+	location *time.Location,
+	etaProfiles ...map[string]float64,
+) *ArrivalService {
+	service := &ArrivalService{repo: repo, location: location}
 	if len(etaProfiles) > 0 {
 		service.etaProfiles = etaProfiles[0]
 	}
@@ -53,7 +58,11 @@ func NewArrivalService(repo *database.ArrivalRepository, etaProfiles ...map[stri
 
 // GetAllLoungeArrivals gets arrivals for all lounges with calculated remarks
 func (s *ArrivalService) GetAllLoungeArrivals() ([]models.LoungeArrivalResponse, error) {
-	arrivals, err := s.repo.GetAllLoungeArrivals()
+	start, end, err := currentServiceDayBounds(time.Now(), s.location)
+	if err != nil {
+		return nil, err
+	}
+	arrivals, err := s.repo.GetAllLoungeArrivals(start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +76,11 @@ func (s *ArrivalService) GetAllLoungeArrivals() ([]models.LoungeArrivalResponse,
 
 // GetArrivalsByLoungeID gets arrivals for a specific lounge with calculated remarks
 func (s *ArrivalService) GetArrivalsByLoungeID(loungeID string) (*models.LoungeArrivalResponse, error) {
-	arrivals, err := s.repo.GetArrivalsByLoungeID(loungeID)
+	start, end, err := currentServiceDayBounds(time.Now(), s.location)
+	if err != nil {
+		return nil, err
+	}
+	arrivals, err := s.repo.GetArrivalsByLoungeID(loungeID, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -190,6 +203,13 @@ func (s *ArrivalService) processArrivals(arrivals []models.ArrivalInfo) {
 			// Calculate new ETA timestamp specific to THIS lounge
 			newETA := now.Add(time.Duration(finalETAMinutes) * time.Minute)
 			arrival.ETA = &newETA
+		} else if routeDuration, ok := calculateRoadTypeRouteDuration(
+			arrival.RouteSegments,
+			s.etaProfiles,
+		); ok && arrival.DepartureTime != nil {
+			routeETA := arrival.DepartureTime.Add(routeDuration)
+			arrival.CalculatedETAMinutes = routeDuration.Minutes()
+			arrival.ETA = &routeETA
 		} else if arrival.ETA == nil && arrival.DepartureTime != nil && arrival.OffsetMinutes != nil {
 			// Fallback: Use route offset from departure time for THIS specific lounge
 			// This ensures each lounge gets its own ETA based on its offset
@@ -262,6 +282,44 @@ func calculateSegmentBasedETA(
 	}
 
 	return distanceKm, etaMinutes, distanceKm > 0
+}
+
+func calculateRoadTypeRouteDuration(
+	segments []models.RouteSegment,
+	etaProfiles map[string]float64,
+) (time.Duration, bool) {
+	if len(segments) == 0 {
+		return 0, false
+	}
+
+	hasKnownRoadType := false
+	totalMinutes := 0.0
+	for _, segment := range segments {
+		if segment.DistanceKM <= 0 ||
+			math.IsNaN(segment.DistanceKM) ||
+			math.IsInf(segment.DistanceKM, 0) {
+			return 0, false
+		}
+
+		roadType := strings.ToUpper(strings.TrimSpace(segment.RoadType))
+		if multiplier := etaProfiles[roadType]; roadType != "" && roadType != "UNKNOWN" &&
+			multiplier > 0 && !math.IsNaN(multiplier) && !math.IsInf(multiplier, 0) {
+			hasKnownRoadType = true
+		}
+
+		speed := segmentBaselineSpeed(segment, etaProfiles)
+		if speed <= 0 || math.IsNaN(speed) || math.IsInf(speed, 0) {
+			return 0, false
+		}
+		totalMinutes += segment.DistanceKM / speed * 60
+	}
+
+	if !hasKnownRoadType || totalMinutes <= 0 ||
+		math.IsNaN(totalMinutes) || math.IsInf(totalMinutes, 0) {
+		return 0, false
+	}
+
+	return time.Duration(totalMinutes * float64(time.Minute)), true
 }
 
 func nearestRoutePosition(latitude, longitude float64, segments []models.RouteSegment, referenceLatitude float64) (positionKm, distanceKm float64) {

@@ -1,18 +1,19 @@
 {
-  "updatedAt": "2026-11-06T10:44:25.8213657Z",
+  "updatedAt": "2026-11-10T19:36:09.1968427Z",
   "sourceUrl": "http://localhost:8083/api/tv/broadcasts",
   "items": [
     {
-      "id": "13a7800b-ea4d-419c-a2a1-1a03f2eb5181",
-      "message": "Hi Guys – automated broadcast test!",
-      "priority": "normal",
-      "displayDurationSeconds": 10,
+      "id": "f6378a11-a99a-4814-926d-55f4abec0080",
+      "message": "ALERT: flood situation in Kurunegala",
+      "priority": "critical",
+      "displayDurationSeconds": 60,
       "frequencySeconds": 60,
-      "startAt": "2026-05-19T10:21:54.291072+05:30",
+      "startAt": "2026-11-10T15:18:00+05:30",
+      "endAt": "2026-11-11T15:18:00+05:30",
       "isActive": true,
       "showOnLoungeTV": true,
-      "createdAt": "2026-05-19T10:21:55.351508+05:30",
-      "updatedAt": "2026-05-19T10:21:55.351508+05:30"
+      "createdAt": "2026-11-10T15:16:24.204873+05:30",
+      "updatedAt": "2026-11-10T15:16:24.204873+05:30"
     }
   ]
 }

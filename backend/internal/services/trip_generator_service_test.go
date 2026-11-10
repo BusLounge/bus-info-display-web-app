@@ -1,12 +1,134 @@
 package services
 
 import (
+	"context"
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
 	"bus-schedule-lounge/internal/database"
+	wsupdates "bus-schedule-lounge/internal/websocket"
 )
+
+type tripGeneratorRepositoryStub struct {
+	schedules          []database.TripSchedule
+	generatedDurations []int64
+}
+
+func (r *tripGeneratorRepositoryStub) ListActiveTripSchedules(context.Context) ([]database.TripSchedule, error) {
+	return r.schedules, nil
+}
+
+func (r *tripGeneratorRepositoryStub) GenerateTrip(
+	_ context.Context,
+	_ database.TripSchedule,
+	_ time.Time,
+	durationMinutes int64,
+) error {
+	r.generatedDurations = append(r.generatedDurations, durationMinutes)
+	return nil
+}
+
+func (r *tripGeneratorRepositoryStub) GetLoungeIDsByBusOwnerRouteID(context.Context, string) ([]string, error) {
+	return nil, nil
+}
+
+func TestGenerateForDateFallsBackToRouteDuration(t *testing.T) {
+	repository := &tripGeneratorRepositoryStub{
+		schedules: []database.TripSchedule{{
+			ID:                           "schedule-1",
+			RecurrenceType:               "daily",
+			DepartureTime:                "08:30:00",
+			EstimatedDurationMinutes:     sql.NullInt64{Int64: 0, Valid: true},
+			RouteEstimatedDurationMinutes: sql.NullInt64{Int64: 95, Valid: true},
+		}},
+	}
+	location := time.FixedZone("service", 5*60*60+30*60)
+	service := NewTripGeneratorService(repository, location, wsupdates.NewHub(nil))
+	serviceDate := time.Date(2026, 11, 11, 0, 0, 0, 0, location)
+
+	if err := service.GenerateForDate(context.Background(), serviceDate); err != nil {
+		t.Fatalf("GenerateForDate() error = %v", err)
+	}
+	if len(repository.generatedDurations) != 1 || repository.generatedDurations[0] != 95 {
+		t.Fatalf("generated durations = %v, want [95]", repository.generatedDurations)
+	}
+}
+
+func TestGenerateForDateSkipsWhenBothDurationsAreInvalid(t *testing.T) {
+	repository := &tripGeneratorRepositoryStub{
+		schedules: []database.TripSchedule{{
+			ID:                           "schedule-1",
+			RecurrenceType:               "daily",
+			DepartureTime:                "08:30:00",
+			EstimatedDurationMinutes:     sql.NullInt64{Int64: 0, Valid: true},
+			RouteEstimatedDurationMinutes: sql.NullInt64{Int64: -10, Valid: true},
+		}},
+	}
+	location := time.FixedZone("service", 5*60*60+30*60)
+	service := NewTripGeneratorService(repository, location, wsupdates.NewHub(nil))
+	serviceDate := time.Date(2026, 11, 11, 0, 0, 0, 0, location)
+
+	err := service.GenerateForDate(context.Background(), serviceDate)
+	if err == nil || !strings.Contains(err.Error(), "no positive estimated_duration_minutes") {
+		t.Fatalf("GenerateForDate() error = %v, want missing-duration error", err)
+	}
+	if len(repository.generatedDurations) != 0 {
+		t.Fatalf("generated durations = %v, want no generated trips", repository.generatedDurations)
+	}
+}
+
+func TestScheduleDurationUsesScheduleBeforeRoute(t *testing.T) {
+	tests := []struct {
+		name        string
+		schedule    sql.NullInt64
+		route       sql.NullInt64
+		want        int64
+		wantValid   bool
+	}{
+		{
+			name:      "prefer positive schedule duration",
+			schedule:  sql.NullInt64{Int64: 60, Valid: true},
+			route:     sql.NullInt64{Int64: 95, Valid: true},
+			want:      60,
+			wantValid: true,
+		},
+		{
+			name:      "fallback when schedule duration is null",
+			schedule:  sql.NullInt64{},
+			route:     sql.NullInt64{Int64: 95, Valid: true},
+			want:      95,
+			wantValid: true,
+		},
+		{
+			name:      "fallback when schedule duration is negative",
+			schedule:  sql.NullInt64{Int64: -5, Valid: true},
+			route:     sql.NullInt64{Int64: 95, Valid: true},
+			want:      95,
+			wantValid: true,
+		},
+		{
+			name:      "invalid when both durations are missing or non-positive",
+			schedule:  sql.NullInt64{Int64: 0, Valid: true},
+			route:     sql.NullInt64{Int64: -10, Valid: true},
+			wantValid: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, ok := scheduleDurationMinutes(database.TripSchedule{
+				EstimatedDurationMinutes:     test.schedule,
+				RouteEstimatedDurationMinutes: test.route,
+			})
+			if got != test.want || ok != test.wantValid {
+				t.Fatalf("scheduleDurationMinutes() = (%d, %v), want (%d, %v)",
+					got, ok, test.want, test.wantValid)
+			}
+		})
+	}
+}
 
 func TestScheduleRunsOn(t *testing.T) {
 	date := func(value string) time.Time {
