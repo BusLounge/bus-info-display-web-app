@@ -1,6 +1,6 @@
 {
   "loungeGroup": "alohaRavePluse",
-  "updatedAt": "2026-11-10T19:31:07.8525072Z",
+  "updatedAt": "2026-11-13T06:23:29.5382857Z",
   "sourceUrl": "http://localhost:8083/api/tv/ads/alohaRavePluse",
   "items": [
     {
@@ -23,7 +23,7 @@
       "playTimeSlots": [
         "12:00 PM"
       ],
-      "nextPlayAt": "2026-11-11T06:30:00Z"
+      "nextPlayAt": "2026-11-13T06:30:00Z"
     }
   ]
 }

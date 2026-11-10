@@ -31,7 +31,7 @@ func (s *DepartureService) GetAllLoungeDepartures() ([]models.LoungeDepartureRes
 	s.processDepartures(departures)
 
 	// Group by lounge
-	return s.groupByLounge(departures), nil
+	return s.groupByLounge(departures, start.Format("2006-01-02"), s.location.String()), nil
 }
 
 // GetDeparturesByLoungeID gets departures for a specific lounge with calculated remarks
@@ -47,9 +47,11 @@ func (s *DepartureService) GetDeparturesByLoungeID(loungeID string) (*models.Lou
 
 	if len(departures) == 0 {
 		return &models.LoungeDepartureResponse{
-			LoungeID:   loungeID,
-			LoungeName: "",
-			Departures: []models.DepartureInfo{},
+			LoungeID:        loungeID,
+			LoungeName:      "",
+			ServiceDate:     start.Format("2006-01-02"),
+			ServiceTimeZone: s.location.String(),
+			Departures:      []models.DepartureInfo{},
 		}, nil
 	}
 
@@ -57,9 +59,11 @@ func (s *DepartureService) GetDeparturesByLoungeID(loungeID string) (*models.Lou
 	s.processDepartures(departures)
 
 	return &models.LoungeDepartureResponse{
-		LoungeID:   departures[0].LoungeID,
-		LoungeName: departures[0].LoungeName,
-		Departures: departures,
+		LoungeID:        departures[0].LoungeID,
+		LoungeName:      departures[0].LoungeName,
+		ServiceDate:     start.Format("2006-01-02"),
+		ServiceTimeZone: s.location.String(),
+		Departures:      departures,
 	}, nil
 }
 
@@ -133,16 +137,21 @@ func (s *DepartureService) processDepartures(departures []models.DepartureInfo) 
 }
 
 // groupByLounge groups departures by lounge
-func (s *DepartureService) groupByLounge(departures []models.DepartureInfo) []models.LoungeDepartureResponse {
+func (s *DepartureService) groupByLounge(
+	departures []models.DepartureInfo,
+	serviceDate, serviceTimeZone string,
+) []models.LoungeDepartureResponse {
 	loungeMap := make(map[string]*models.LoungeDepartureResponse)
 	var loungeOrder []string
 
 	for _, departure := range departures {
 		if _, exists := loungeMap[departure.LoungeID]; !exists {
 			loungeMap[departure.LoungeID] = &models.LoungeDepartureResponse{
-				LoungeID:   departure.LoungeID,
-				LoungeName: departure.LoungeName,
-				Departures: []models.DepartureInfo{},
+				LoungeID:        departure.LoungeID,
+				LoungeName:      departure.LoungeName,
+				ServiceDate:     serviceDate,
+				ServiceTimeZone: serviceTimeZone,
+				Departures:      []models.DepartureInfo{},
 			}
 			loungeOrder = append(loungeOrder, departure.LoungeID)
 		}

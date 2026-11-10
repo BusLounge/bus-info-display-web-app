@@ -374,6 +374,7 @@ function createMainWindow() {
     width: 800,
     height: 600,
     kiosk: true,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -385,6 +386,8 @@ function createMainWindow() {
   mainWindow.webContents.on('context-menu', (event) => {
     event.preventDefault();
   });
+  mainWindow.webContents.setZoomFactor(1);
+  mainWindow.webContents.setVisualZoomLevelLimits(1, 1);
 
   mainWindow.webContents.on('did-finish-load', () => {
     mainWindow.webContents.insertCSS(
@@ -398,10 +401,25 @@ function createMainWindow() {
     const key = input.key.toLowerCase();
     const isAltF4 = key === 'f4' && input.alt;
     const isCommandQ = key === 'q' && input.meta;
+    const isCloseOrReloadShortcut =
+      (key === 'w' || key === 'q' || key === 'r') && input.control;
+    const isDevToolsShortcut =
+      (key === 'i' || key === 'j') && input.control && input.shift;
+    const isBrowserFunctionShortcut = key === 'f5' || key === 'f11';
+    const isZoomShortcut =
+      (key === '+' || key === '=' || key === '-' || key === '0') &&
+      (input.control || input.meta);
     const isAdminShortcut =
       key === 'q' && input.control && input.shift;
 
-    if (isAltF4 || isCommandQ || isAdminShortcut) {
+    if (
+      isAltF4 ||
+      isCommandQ ||
+      (isCloseOrReloadShortcut && !isAdminShortcut) ||
+      isDevToolsShortcut ||
+      isBrowserFunctionShortcut ||
+      isZoomShortcut
+    ) {
       event.preventDefault();
     }
 
@@ -443,6 +461,20 @@ function createMainWindow() {
     mainWindow = null;
     if (pollingInterval) {
       clearInterval(pollingInterval);
+    }
+  });
+
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+    }
+  });
+
+  mainWindow.on('minimize', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow.restore();
+      mainWindow.focus();
     }
   });
 }
@@ -517,6 +549,14 @@ app.on('before-quit', (event) => {
   Promise.all([stopGoProcess(), stopExpressServer()])
     .catch((error) => console.error('Error during application shutdown:', error))
     .finally(() => app.quit());
+});
+
+app.on('query-session-end', () => {
+  isQuitting = true;
+});
+
+app.on('session-end', () => {
+  isQuitting = true;
 });
 
 app.on('activate', function () {

@@ -41,11 +41,13 @@ func (c Config) AdsEnabled() bool {
 }
 
 type ScheduleSnapshot struct {
-	LoungeID      string      `json:"loungeId"`
-	UpdatedAt     time.Time   `json:"updatedAt"`
-	SourceURL     string      `json:"sourceUrl"`
-	DeparturesRaw interface{} `json:"departuresRaw"`
-	ArrivalsRaw   interface{} `json:"arrivalsRaw"`
+	LoungeID        string      `json:"loungeId"`
+	ServiceDate     string      `json:"serviceDate,omitempty"`
+	ServiceTimeZone string      `json:"serviceTimeZone,omitempty"`
+	UpdatedAt       time.Time   `json:"updatedAt"`
+	SourceURL       string      `json:"sourceUrl"`
+	DeparturesRaw   interface{} `json:"departuresRaw"`
+	ArrivalsRaw     interface{} `json:"arrivalsRaw"`
 }
 
 type Advertisement struct {

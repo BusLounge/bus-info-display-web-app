@@ -1,15 +1,21 @@
 {
   "loungeId": "91570523-5260-4fcd-a365-8fbe0dbf2662",
-  "updatedAt": "2026-11-10T19:36:09.730884Z",
+  "serviceDate": "2026-11-13",
+  "serviceTimeZone": "Asia/Colombo",
+  "updatedAt": "2026-11-13T06:27:27.3421638Z",
   "sourceUrl": "http://localhost:8083",
   "departuresRaw": {
     "departures": [],
     "loungeId": "91570523-5260-4fcd-a365-8fbe0dbf2662",
-    "loungeName": ""
+    "loungeName": "",
+    "serviceDate": "2026-11-13",
+    "serviceTimeZone": "Asia/Colombo"
   },
   "arrivalsRaw": {
     "arrivals": [],
     "loungeId": "91570523-5260-4fcd-a365-8fbe0dbf2662",
-    "loungeName": ""
+    "loungeName": "",
+    "serviceDate": "2026-11-13",
+    "serviceTimeZone": "Asia/Colombo"
   }
 }

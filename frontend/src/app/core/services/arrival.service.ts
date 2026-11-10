@@ -7,6 +7,7 @@ export interface ArrivalInfo {
   loungeName: string;
   activeTripId: string;
   busNo: string;
+  busCompanyName?: string;
   routeNumber: string;
   origin: string;
   destination: string;
@@ -22,6 +23,8 @@ export interface ArrivalInfo {
 export interface LoungeArrivalResponse {
   loungeId: string;
   loungeName: string;
+  serviceDate?: string;
+  serviceTimeZone?: string;
   arrivals: ArrivalInfo[];
 }
 

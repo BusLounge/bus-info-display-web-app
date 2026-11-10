@@ -171,12 +171,13 @@ func TestSyncAdsCleanupPreservesActiveLoungeMedia(t *testing.T) {
 		}
 	}
 
+	loungeID := "lounge-1"
 	loungeSnapshot := models.LoungeAdsSnapshot{
 		LoungeID: "lounge-1",
 		Items: []models.LoungeAd{
-			{ID: "active-1", MediaURL: server.URL + "/active.mp4", LocalFile: "active-lounge.mp4", IsActive: true},
-			{ID: "legacy", MediaURL: server.URL + "/legacy-lounge.webm", IsActive: true},
-			{ID: "inactive", MediaURL: server.URL + "/inactive.mp4", LocalFile: "inactive-lounge.mp4", IsActive: false},
+			{ID: "active-1", LoungeID: &loungeID, MediaURL: server.URL + "/active.mp4", LocalFile: "active-lounge.mp4", IsActive: true},
+			{ID: "legacy", LoungeID: &loungeID, MediaURL: server.URL + "/legacy-lounge.webm", IsActive: true},
+			{ID: "inactive", LoungeID: &loungeID, MediaURL: server.URL + "/inactive.mp4", LocalFile: "inactive-lounge.mp4", IsActive: false},
 		},
 	}
 	snapshotBytes, err := json.Marshal(loungeSnapshot)
@@ -205,9 +206,55 @@ func TestSyncAdsCleanupPreservesActiveLoungeMedia(t *testing.T) {
 			t.Errorf("active lounge media %q was removed: %v", name, err)
 		}
 	}
+
 	for _, name := range []string{"inactive-lounge.mp4", "orphan.mp4"} {
 		if _, err := os.Stat(filepath.Join(mediaDir, name)); !os.IsNotExist(err) {
 			t.Errorf("inactive/orphan media %q was not removed (stat error = %v)", name, err)
+		}
+	}
+}
+
+func TestMergeLocalAndRemoteLoungeAdsFiltersOtherLounge(t *testing.T) {
+	currentLoungeID := "lounge-1"
+	otherLoungeID := "lounge-2"
+
+	merged := mergeLocalAndRemoteLoungeAds(
+		[]models.LoungeAd{
+			{
+				ID:       "local-current",
+				LoungeID: &currentLoungeID,
+				MediaURL: "/local/media/current.mp4",
+			},
+			{
+				ID:       "local-other",
+				LoungeID: &otherLoungeID,
+				MediaURL: "/local/media/other.mp4",
+			},
+			{
+				ID:              "local-default",
+				IsDefaultForAll: true,
+				MediaURL:        "/local/media/default.mp4",
+			},
+			{
+				ID:       "local-unassigned",
+				MediaURL: "/local/media/unassigned.mp4",
+			},
+		},
+		[]models.LoungeAd{{
+			ID:       "remote-current",
+			LoungeID: &currentLoungeID,
+			MediaURL: "https://example.test/remote.mp4",
+		}},
+		currentLoungeID,
+	)
+
+	wantIDs := []string{"local-current", "local-default", "remote-current"}
+	if len(merged) != len(wantIDs) {
+		t.Fatalf("merged item count = %d, want %d", len(merged), len(wantIDs))
+	}
+	for i, wantID := range wantIDs {
+		if merged[i].ID != wantID {
+			t.Errorf("merged[%d].ID = %q, want %q", i, merged[i].ID, wantID)
 		}
 	}
 }

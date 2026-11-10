@@ -10,6 +10,7 @@ type DepartureInfo struct {
 	LoungeLng              *float64   `json:"loungeLongitude" db:"lounge_longitude"`
 	ActiveTripID           string     `json:"activeTripId" db:"active_trip_id"`
 	BusNumber              string     `json:"busNo" db:"bus_number"`
+	BusCompanyName         string     `json:"busCompanyName" db:"bus_company_name"`
 	RouteNumber            string     `json:"routeNumber" db:"route_number"`
 	Origin                 string     `json:"origin" db:"origin_city"`
 	Destination            string     `json:"destination" db:"destination_city"`
@@ -29,7 +30,9 @@ type DepartureInfo struct {
 
 // LoungeDepartureResponse represents departures grouped by lounge
 type LoungeDepartureResponse struct {
-	LoungeID   string          `json:"loungeId"`
-	LoungeName string          `json:"loungeName"`
-	Departures []DepartureInfo `json:"departures"`
+	LoungeID        string          `json:"loungeId"`
+	LoungeName      string          `json:"loungeName"`
+	ServiceDate     string          `json:"serviceDate"`
+	ServiceTimeZone string          `json:"serviceTimeZone"`
+	Departures      []DepartureInfo `json:"departures"`
 }

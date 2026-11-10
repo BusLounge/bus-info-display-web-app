@@ -256,7 +256,7 @@ func (a *Agent) SyncLoungeAds(ctx context.Context) error {
 			return err
 		}
 	}
-	items = mergeLocalAndRemoteLoungeAds(existingSnapshot.Items, items)
+	items = mergeLocalAndRemoteLoungeAds(existingSnapshot.Items, items, a.cfg.LoungeID)
 	a.hydrateMissingLoungeMedia(items)
 
 	snapshot := models.LoungeAdsSnapshot{
@@ -323,13 +323,18 @@ func (a *Agent) cacheRemoteLoungeAdMedia(ctx context.Context, ad *models.LoungeA
 	return nil
 }
 
-func mergeLocalAndRemoteLoungeAds(existing, remote []models.LoungeAd) []models.LoungeAd {
+func mergeLocalAndRemoteLoungeAds(existing, remote []models.LoungeAd, loungeID string) []models.LoungeAd {
 	merged := make([]models.LoungeAd, 0, len(existing)+len(remote))
 	seen := make(map[string]struct{})
+	loungeID = strings.TrimSpace(loungeID)
 
 	// Local ads first so TV playback prefers what was created on this device.
 	for _, item := range existing {
 		if !isLocalUploadedLoungeAd(item) {
+			continue
+		}
+		if !item.IsDefaultForAll &&
+			(item.LoungeID == nil || strings.TrimSpace(*item.LoungeID) != loungeID) {
 			continue
 		}
 		key := loungeAdMergeKey(item)
@@ -392,13 +397,20 @@ func (a *Agent) SyncSchedule(ctx context.Context) error {
 		a.setScheduleError(err)
 		return err
 	}
+	serviceDate, serviceTimeZone, err := scheduleServiceDay(depRaw, arrRaw)
+	if err != nil {
+		a.setScheduleError(err)
+		return err
+	}
 
 	snapshot := models.ScheduleSnapshot{
-		LoungeID:      a.cfg.LoungeID,
-		UpdatedAt:     time.Now().UTC(),
-		SourceURL:     a.cfg.ServerURL,
-		DeparturesRaw: depRaw,
-		ArrivalsRaw:   arrRaw,
+		LoungeID:        a.cfg.LoungeID,
+		ServiceDate:     serviceDate,
+		ServiceTimeZone: serviceTimeZone,
+		UpdatedAt:       time.Now().UTC(),
+		SourceURL:       a.cfg.ServerURL,
+		DeparturesRaw:   depRaw,
+		ArrivalsRaw:     arrRaw,
 	}
 
 	if err := writeJSONAtomic(a.schedulePath, snapshot); err != nil {
@@ -411,6 +423,43 @@ func (a *Agent) SyncSchedule(ctx context.Context) error {
 	a.status.LastScheduleErr = ""
 	a.mu.Unlock()
 	return nil
+}
+
+func scheduleServiceDay(departures, arrivals interface{}) (string, string, error) {
+	departureDate, departureTimeZone := scheduleServiceDayFromResponse(departures)
+	arrivalDate, arrivalTimeZone := scheduleServiceDayFromResponse(arrivals)
+	if departureDate != "" && arrivalDate != "" && departureDate != arrivalDate {
+		return "", "", fmt.Errorf(
+			"schedule responses disagree on service date: departures=%q arrivals=%q",
+			departureDate, arrivalDate,
+		)
+	}
+	if departureTimeZone != "" && arrivalTimeZone != "" && departureTimeZone != arrivalTimeZone {
+		return "", "", fmt.Errorf(
+			"schedule responses disagree on service timezone: departures=%q arrivals=%q",
+			departureTimeZone, arrivalTimeZone,
+		)
+	}
+
+	serviceDate := departureDate
+	if serviceDate == "" {
+		serviceDate = arrivalDate
+	}
+	serviceTimeZone := departureTimeZone
+	if serviceTimeZone == "" {
+		serviceTimeZone = arrivalTimeZone
+	}
+	return serviceDate, serviceTimeZone, nil
+}
+
+func scheduleServiceDayFromResponse(response interface{}) (string, string) {
+	payload, ok := response.(map[string]interface{})
+	if !ok {
+		return "", ""
+	}
+	serviceDate, _ := payload["serviceDate"].(string)
+	serviceTimeZone, _ := payload["serviceTimeZone"].(string)
+	return strings.TrimSpace(serviceDate), strings.TrimSpace(serviceTimeZone)
 }
 
 func (a *Agent) SyncAds(ctx context.Context) error {

@@ -1,19 +1,5 @@
 {
-  "updatedAt": "2026-11-10T19:36:09.1968427Z",
+  "updatedAt": "2026-11-13T06:27:27.6489148Z",
   "sourceUrl": "http://localhost:8083/api/tv/broadcasts",
-  "items": [
-    {
-      "id": "f6378a11-a99a-4814-926d-55f4abec0080",
-      "message": "ALERT: flood situation in Kurunegala",
-      "priority": "critical",
-      "displayDurationSeconds": 60,
-      "frequencySeconds": 60,
-      "startAt": "2026-11-10T15:18:00+05:30",
-      "endAt": "2026-11-11T15:18:00+05:30",
-      "isActive": true,
-      "showOnLoungeTV": true,
-      "createdAt": "2026-11-10T15:16:24.204873+05:30",
-      "updatedAt": "2026-11-10T15:16:24.204873+05:30"
-    }
-  ]
+  "items": []
 }

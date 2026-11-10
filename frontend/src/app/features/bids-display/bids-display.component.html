@@ -1,4 +1,4 @@
-<div class="bids-display" [style.zoom]="displayScale" [class.connection-lost]="!isInternetConnected">
+<div class="bids-display" [class.connection-lost]="!isInternetConnected">
   <div class="header" *ngIf="!isHybridAlternateAdDisplay">
     <div class="header-brand">
       <span class="brand-mark" aria-hidden="true"></span>
@@ -50,30 +50,38 @@
                   <thead>
                     <tr>
                       <th>{{ t('time') }}</th>
-                      <th>{{ t('busNo') }}</th>
+                      <th>{{ t('busNo') }} / {{ t('busCompany') }}</th>
                       <th>{{ t('routeNumber') }}</th>
                       <th>{{ t('destination') }}</th>
                       <th>{{ t('remarks') }}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr *ngFor="let dep of departures" [class.has-indicator]="dep.indicator">
-                      <td>
-                        <span class="indicator" *ngIf="dep.indicator">●</span>
-                        {{ dep.time }}
-                      </td>
-                      <td>{{ dep.busNo || 'TBA' }}</td>
-                      <td>{{ dep.routeNo }}</td>
-                      <td>{{ dep.destination }}</td>
-                      <td>
-                        <span class="remark" [ngClass]="dep.status">{{ dep.remarks }}</span>
-                      </td>
-                    </tr>
-                    <tr *ngIf="!departures.length && !loading">
-                      <td colspan="5">{{ t('noDepartures') }}</td>
+                    <tr *ngFor="let dep of departureDisplayRows; let rowIndex = index" [class.has-indicator]="dep?.indicator">
+                      <ng-container *ngIf="dep; else emptySplitDeparture">
+                        <td>
+                          <span class="indicator" *ngIf="dep.indicator">●</span>
+                          {{ dep.time }}
+                        </td>
+                        <td class="bus-details">
+                          <span class="bus-number">{{ dep.busNo || 'TBA' }}</span>
+                          <span class="bus-company">{{ dep.busCompanyName || t('companyTba') }}</span>
+                        </td>
+                        <td>{{ dep.routeNo }}</td>
+                        <td>{{ dep.destination }}</td>
+                        <td>
+                          <span class="remark" [ngClass]="dep.status">{{ dep.remarks }}</span>
+                        </td>
+                      </ng-container>
+                      <ng-template #emptySplitDeparture>
+                        <td colspan="5">{{ rowIndex === 0 && !departures.length && !loading ? (noTripsScheduledToday ? t('noTripsScheduledToday') : t('noDepartures')) : '' }}</td>
+                      </ng-template>
                     </tr>
                   </tbody>
                 </table>
+              </div>
+              <div class="schedule-page-indicator" *ngIf="departurePageLabel" aria-live="polite">
+                {{ departurePageLabel }}
               </div>
             </div>
 
@@ -85,30 +93,38 @@
                   <thead>
                     <tr>
                       <th>{{ t('time') }}</th>
-                      <th>{{ t('busNo') }}</th>
+                      <th>{{ t('busNo') }} / {{ t('busCompany') }}</th>
                       <th>{{ t('routeNumber') }}</th>
                       <th>{{ t('origin') }}</th>
                       <th>{{ t('remarks') }}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr *ngFor="let arr of arrivals" [class.has-indicator]="arr.indicator">
-                      <td>
-                        <span class="indicator" *ngIf="arr.indicator">●</span>
-                        {{ arr.time }}
-                      </td>
-                      <td>{{ arr.busNo || 'TBA' }}</td>
-                      <td>{{ arr.routeNo }}</td>
-                      <td>{{ arr.origin }}</td>
-                      <td>
-                        <span class="remark" [ngClass]="arr.status">{{ arr.remarks }}</span>
-                      </td>
-                    </tr>
-                    <tr *ngIf="!arrivals.length && !loading">
-                      <td colspan="5">{{ t('noArrivals') }}</td>
+                    <tr *ngFor="let arr of arrivalDisplayRows; let rowIndex = index" [class.has-indicator]="arr?.indicator">
+                      <ng-container *ngIf="arr; else emptySplitArrival">
+                        <td>
+                          <span class="indicator" *ngIf="arr.indicator">●</span>
+                          {{ arr.time }}
+                        </td>
+                        <td class="bus-details">
+                          <span class="bus-number">{{ arr.busNo || 'TBA' }}</span>
+                          <span class="bus-company">{{ arr.busCompanyName || t('companyTba') }}</span>
+                        </td>
+                        <td>{{ arr.routeNo }}</td>
+                        <td>{{ arr.origin }}</td>
+                        <td>
+                          <span class="remark" [ngClass]="arr.status">{{ arr.remarks }}</span>
+                        </td>
+                      </ng-container>
+                      <ng-template #emptySplitArrival>
+                        <td colspan="5">{{ rowIndex === 0 && !arrivals.length && !loading && !noTripsScheduledToday ? t('noArrivals') : '' }}</td>
+                      </ng-template>
                     </tr>
                   </tbody>
                 </table>
+              </div>
+              <div class="schedule-page-indicator" *ngIf="arrivalPageLabel" aria-live="polite">
+                {{ arrivalPageLabel }}
               </div>
             </div>
           </div>
@@ -143,30 +159,38 @@
                 <thead>
                   <tr>
                     <th>{{ t('time') }}</th>
-                    <th>{{ t('busNo') }}</th>
+                    <th>{{ t('busNo') }} / {{ t('busCompany') }}</th>
                     <th>{{ t('routeNumber') }}</th>
                     <th>{{ t('destination') }}</th>
                     <th>{{ t('remarks') }}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let dep of departures" [class.has-indicator]="dep.indicator">
-                    <td>
-                      <span class="indicator" *ngIf="dep.indicator">●</span>
-                      {{ dep.time }}
-                    </td>
-                    <td>{{ dep.busNo || 'TBA' }}</td>
-                    <td>{{ dep.routeNo }}</td>
-                    <td>{{ dep.destination }}</td>
-                    <td>
-                      <span class="remark" [ngClass]="dep.status">{{ dep.remarks }}</span>
-                    </td>
-                  </tr>
-                  <tr *ngIf="!departures.length && !loading">
-                    <td colspan="5">{{ t('noDepartures') }}</td>
+                  <tr *ngFor="let dep of departureDisplayRows; let rowIndex = index" [class.has-indicator]="dep?.indicator">
+                    <ng-container *ngIf="dep; else emptyAlternateDeparture">
+                      <td>
+                        <span class="indicator" *ngIf="dep.indicator">●</span>
+                        {{ dep.time }}
+                      </td>
+                      <td class="bus-details">
+                        <span class="bus-number">{{ dep.busNo || 'TBA' }}</span>
+                        <span class="bus-company">{{ dep.busCompanyName || t('companyTba') }}</span>
+                      </td>
+                      <td>{{ dep.routeNo }}</td>
+                      <td>{{ dep.destination }}</td>
+                      <td>
+                        <span class="remark" [ngClass]="dep.status">{{ dep.remarks }}</span>
+                      </td>
+                    </ng-container>
+                    <ng-template #emptyAlternateDeparture>
+                      <td colspan="5">{{ rowIndex === 0 && !departures.length && !loading ? (noTripsScheduledToday ? t('noTripsScheduledToday') : t('noDepartures')) : '' }}</td>
+                    </ng-template>
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="schedule-page-indicator" *ngIf="departurePageLabel" aria-live="polite">
+              {{ departurePageLabel }}
             </div>
           </div>
 
@@ -178,30 +202,38 @@
                 <thead>
                   <tr>
                     <th>{{ t('time') }}</th>
-                    <th>{{ t('busNo') }}</th>
+                    <th>{{ t('busNo') }} / {{ t('busCompany') }}</th>
                     <th>{{ t('routeNumber') }}</th>
                     <th>{{ t('origin') }}</th>
                     <th>{{ t('remarks') }}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let arr of arrivals" [class.has-indicator]="arr.indicator">
-                    <td>
-                      <span class="indicator" *ngIf="arr.indicator">●</span>
-                      {{ arr.time }}
-                    </td>
-                    <td>{{ arr.busNo || 'TBA' }}</td>
-                    <td>{{ arr.routeNo }}</td>
-                    <td>{{ arr.origin }}</td>
-                    <td>
-                      <span class="remark" [ngClass]="arr.status">{{ arr.remarks }}</span>
-                    </td>
-                  </tr>
-                  <tr *ngIf="!arrivals.length && !loading">
-                    <td colspan="5">{{ t('noArrivals') }}</td>
+                  <tr *ngFor="let arr of arrivalDisplayRows; let rowIndex = index" [class.has-indicator]="arr?.indicator">
+                    <ng-container *ngIf="arr; else emptyAlternateArrival">
+                      <td>
+                        <span class="indicator" *ngIf="arr.indicator">●</span>
+                        {{ arr.time }}
+                      </td>
+                      <td class="bus-details">
+                        <span class="bus-number">{{ arr.busNo || 'TBA' }}</span>
+                        <span class="bus-company">{{ arr.busCompanyName || t('companyTba') }}</span>
+                      </td>
+                      <td>{{ arr.routeNo }}</td>
+                      <td>{{ arr.origin }}</td>
+                      <td>
+                        <span class="remark" [ngClass]="arr.status">{{ arr.remarks }}</span>
+                      </td>
+                    </ng-container>
+                    <ng-template #emptyAlternateArrival>
+                      <td colspan="5">{{ rowIndex === 0 && !arrivals.length && !loading && !noTripsScheduledToday ? t('noArrivals') : '' }}</td>
+                    </ng-template>
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="schedule-page-indicator" *ngIf="arrivalPageLabel" aria-live="polite">
+              {{ arrivalPageLabel }}
             </div>
           </div>
         </div>
@@ -235,30 +267,38 @@
                 <thead>
                   <tr>
                     <th>{{ t('time') }}</th>
-                    <th>{{ t('busNo') }}</th>
+                    <th>{{ t('busNo') }} / {{ t('busCompany') }}</th>
                     <th>{{ t('routeNumber') }}</th>
                     <th>{{ t('destination') }}</th>
                     <th>{{ t('remarks') }}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let dep of departures" [class.has-indicator]="dep.indicator">
-                    <td>
-                      <span class="indicator" *ngIf="dep.indicator">●</span>
-                      {{ dep.time }}
-                    </td>
-                    <td>{{ dep.busNo || 'TBA' }}</td>
-                    <td>{{ dep.routeNo }}</td>
-                    <td>{{ dep.destination }}</td>
-                    <td>
-                      <span class="remark" [ngClass]="dep.status">{{ dep.remarks }}</span>
-                    </td>
-                  </tr>
-                  <tr *ngIf="!departures.length && !loading">
-                    <td colspan="5">{{ t('noDepartures') }}</td>
+                  <tr *ngFor="let dep of departureDisplayRows; let rowIndex = index" [class.has-indicator]="dep?.indicator">
+                    <ng-container *ngIf="dep; else emptyScheduleDeparture">
+                      <td>
+                        <span class="indicator" *ngIf="dep.indicator">●</span>
+                        {{ dep.time }}
+                      </td>
+                      <td class="bus-details">
+                        <span class="bus-number">{{ dep.busNo || 'TBA' }}</span>
+                        <span class="bus-company">{{ dep.busCompanyName || t('companyTba') }}</span>
+                      </td>
+                      <td>{{ dep.routeNo }}</td>
+                      <td>{{ dep.destination }}</td>
+                      <td>
+                        <span class="remark" [ngClass]="dep.status">{{ dep.remarks }}</span>
+                      </td>
+                    </ng-container>
+                    <ng-template #emptyScheduleDeparture>
+                      <td colspan="5">{{ rowIndex === 0 && !departures.length && !loading ? (noTripsScheduledToday ? t('noTripsScheduledToday') : t('noDepartures')) : '' }}</td>
+                    </ng-template>
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="schedule-page-indicator" *ngIf="departurePageLabel" aria-live="polite">
+              {{ departurePageLabel }}
             </div>
           </div>
 
@@ -270,30 +310,38 @@
                 <thead>
                   <tr>
                     <th>{{ t('time') }}</th>
-                    <th>{{ t('busNo') }}</th>
+                    <th>{{ t('busNo') }} / {{ t('busCompany') }}</th>
                     <th>{{ t('routeNumber') }}</th>
                     <th>{{ t('origin') }}</th>
                     <th>{{ t('remarks') }}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let arr of arrivals" [class.has-indicator]="arr.indicator">
-                    <td>
-                      <span class="indicator" *ngIf="arr.indicator">●</span>
-                      {{ arr.time }}
-                    </td>
-                    <td>{{ arr.busNo || 'TBA' }}</td>
-                    <td>{{ arr.routeNo }}</td>
-                    <td>{{ arr.origin }}</td>
-                    <td>
-                      <span class="remark" [ngClass]="arr.status">{{ arr.remarks }}</span>
-                    </td>
-                  </tr>
-                  <tr *ngIf="!arrivals.length && !loading">
-                    <td colspan="5">{{ t('noArrivals') }}</td>
+                  <tr *ngFor="let arr of arrivalDisplayRows; let rowIndex = index" [class.has-indicator]="arr?.indicator">
+                    <ng-container *ngIf="arr; else emptyScheduleArrival">
+                      <td>
+                        <span class="indicator" *ngIf="arr.indicator">●</span>
+                        {{ arr.time }}
+                      </td>
+                      <td class="bus-details">
+                        <span class="bus-number">{{ arr.busNo || 'TBA' }}</span>
+                        <span class="bus-company">{{ arr.busCompanyName || t('companyTba') }}</span>
+                      </td>
+                      <td>{{ arr.routeNo }}</td>
+                      <td>{{ arr.origin }}</td>
+                      <td>
+                        <span class="remark" [ngClass]="arr.status">{{ arr.remarks }}</span>
+                      </td>
+                    </ng-container>
+                    <ng-template #emptyScheduleArrival>
+                      <td colspan="5">{{ rowIndex === 0 && !arrivals.length && !loading && !noTripsScheduledToday ? t('noArrivals') : '' }}</td>
+                    </ng-template>
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="schedule-page-indicator" *ngIf="arrivalPageLabel" aria-live="polite">
+              {{ arrivalPageLabel }}
             </div>
           </div>
         </div>

@@ -13,6 +13,7 @@ type ArrivalInfo struct {
 	BusID                string     `json:"busId" db:"bus_id"`
 	DriverID             string     `json:"driverId" db:"driver_id"`
 	BusNumber            string     `json:"busNo" db:"bus_number"`
+	BusCompanyName       string     `json:"busCompanyName" db:"bus_company_name"`
 	RouteNumber          string     `json:"routeNumber" db:"route_number"`
 	Origin               string     `json:"origin" db:"origin_city"`
 	Destination          string     `json:"destination" db:"destination_city"`
@@ -34,7 +35,9 @@ type ArrivalInfo struct {
 
 // LoungeArrivalResponse represents arrivals grouped by lounge
 type LoungeArrivalResponse struct {
-	LoungeID   string        `json:"loungeId"`
-	LoungeName string        `json:"loungeName"`
-	Arrivals   []ArrivalInfo `json:"arrivals"`
+	LoungeID        string        `json:"loungeId"`
+	LoungeName      string        `json:"loungeName"`
+	ServiceDate     string        `json:"serviceDate"`
+	ServiceTimeZone string        `json:"serviceTimeZone"`
+	Arrivals        []ArrivalInfo `json:"arrivals"`
 }

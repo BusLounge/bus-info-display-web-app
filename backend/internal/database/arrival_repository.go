@@ -33,6 +33,7 @@ func (r *ArrivalRepository) GetAllLoungeArrivals(
 			at.bus_id as bus_id,
 			at.driver_id as driver_id,
 			b.bus_number,
+			COALESCE(bo.company_name, '') as bus_company_name,
 			mr.route_number,
 			mr.origin_city,
 			mr.destination_city,
@@ -87,6 +88,7 @@ func (r *ArrivalRepository) GetAllLoungeArrivals(
 		JOIN master_route_stops sb ON sb.id = lr.stop_before_id AND sb.master_route_id = lr.master_route_id
 		JOIN master_route_stops sa ON sa.id = lr.stop_after_id AND sa.master_route_id = lr.master_route_id
 		JOIN bus_owner_routes bor ON bor.master_route_id = mr.id
+		LEFT JOIN bus_owners bo ON bo.id = bor.bus_owner_id
 		JOIN scheduled_trips st ON st.bus_owner_route_id = bor.id
 		JOIN active_trips at ON at.scheduled_trip_id = st.id
 		JOIN buses b ON at.bus_id = b.id
@@ -123,6 +125,7 @@ func (r *ArrivalRepository) GetAllLoungeArrivals(
 			&arrival.BusID,
 			&arrival.DriverID,
 			&arrival.BusNumber,
+			&arrival.BusCompanyName,
 			&arrival.RouteNumber,
 			&arrival.Origin,
 			&arrival.Destination,
@@ -176,6 +179,7 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(
 			COALESCE(at.bus_id::text, '') as bus_id,
 			COALESCE(at.driver_id::text, '') as driver_id,
 			COALESCE(b.bus_number, 'Bus TBA') as bus_number,
+			COALESCE(bo.company_name, '') as bus_company_name,
 			mr.route_number,
 			mr.origin_city,
 			mr.destination_city,
@@ -230,11 +234,13 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(
 		JOIN master_route_stops sb ON sb.id = lr.stop_before_id AND sb.master_route_id = lr.master_route_id
 		JOIN master_route_stops sa ON sa.id = lr.stop_after_id AND sa.master_route_id = lr.master_route_id
 		JOIN bus_owner_routes bor ON bor.master_route_id = mr.id
+		LEFT JOIN bus_owners bo ON bo.id = bor.bus_owner_id
 		JOIN scheduled_trips st ON st.bus_owner_route_id = bor.id
 		LEFT JOIN active_trips at ON at.scheduled_trip_id = st.id
 		LEFT JOIN buses b ON at.bus_id = b.id
 		WHERE l.id = $1
 			AND l.is_operational = true
+			AND st.status != 'cancelled'
 			AND sb.stop_order < sa.stop_order
 			AND st.departure_datetime >= $2::timestamp
 			AND st.departure_datetime < $3::timestamp
@@ -272,6 +278,7 @@ func (r *ArrivalRepository) GetArrivalsByLoungeID(
 			&arrival.BusID,
 			&arrival.DriverID,
 			&arrival.BusNumber,
+			&arrival.BusCompanyName,
 			&arrival.RouteNumber,
 			&arrival.Origin,
 			&arrival.Destination,

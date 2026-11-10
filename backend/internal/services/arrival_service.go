@@ -71,7 +71,7 @@ func (s *ArrivalService) GetAllLoungeArrivals() ([]models.LoungeArrivalResponse,
 	s.processArrivals(arrivals)
 
 	// Group by lounge
-	return s.groupByLounge(arrivals), nil
+	return s.groupByLounge(arrivals, start.Format("2006-01-02"), s.location.String()), nil
 }
 
 // GetArrivalsByLoungeID gets arrivals for a specific lounge with calculated remarks
@@ -87,9 +87,11 @@ func (s *ArrivalService) GetArrivalsByLoungeID(loungeID string) (*models.LoungeA
 
 	if len(arrivals) == 0 {
 		return &models.LoungeArrivalResponse{
-			LoungeID:   loungeID,
-			LoungeName: "",
-			Arrivals:   []models.ArrivalInfo{},
+			LoungeID:        loungeID,
+			LoungeName:      "",
+			ServiceDate:     start.Format("2006-01-02"),
+			ServiceTimeZone: s.location.String(),
+			Arrivals:        []models.ArrivalInfo{},
 		}, nil
 	}
 
@@ -97,9 +99,11 @@ func (s *ArrivalService) GetArrivalsByLoungeID(loungeID string) (*models.LoungeA
 	s.processArrivals(arrivals)
 
 	return &models.LoungeArrivalResponse{
-		LoungeID:   arrivals[0].LoungeID,
-		LoungeName: arrivals[0].LoungeName,
-		Arrivals:   arrivals,
+		LoungeID:        arrivals[0].LoungeID,
+		LoungeName:      arrivals[0].LoungeName,
+		ServiceDate:     start.Format("2006-01-02"),
+		ServiceTimeZone: s.location.String(),
+		Arrivals:        arrivals,
 	}, nil
 }
 
@@ -374,16 +378,21 @@ func segmentBaselineSpeed(segment models.RouteSegment, etaProfiles map[string]fl
 }
 
 // groupByLounge groups arrivals by lounge
-func (s *ArrivalService) groupByLounge(arrivals []models.ArrivalInfo) []models.LoungeArrivalResponse {
+func (s *ArrivalService) groupByLounge(
+	arrivals []models.ArrivalInfo,
+	serviceDate, serviceTimeZone string,
+) []models.LoungeArrivalResponse {
 	loungeMap := make(map[string]*models.LoungeArrivalResponse)
 	var loungeOrder []string
 
 	for _, arrival := range arrivals {
 		if _, exists := loungeMap[arrival.LoungeID]; !exists {
 			loungeMap[arrival.LoungeID] = &models.LoungeArrivalResponse{
-				LoungeID:   arrival.LoungeID,
-				LoungeName: arrival.LoungeName,
-				Arrivals:   []models.ArrivalInfo{},
+				LoungeID:        arrival.LoungeID,
+				LoungeName:      arrival.LoungeName,
+				ServiceDate:     serviceDate,
+				ServiceTimeZone: serviceTimeZone,
+				Arrivals:        []models.ArrivalInfo{},
 			}
 			loungeOrder = append(loungeOrder, arrival.LoungeID)
 		}

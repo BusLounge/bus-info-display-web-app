@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { Subscription, of } from 'rxjs';
@@ -48,24 +48,31 @@ type TranslationKey =
   | 'arrivals'
   | 'time'
   | 'busNo'
+  | 'busCompany'
+  | 'companyTba'
   | 'routeNumber'
   | 'destination'
   | 'origin'
   | 'remarks'
   | 'noDepartures'
   | 'noArrivals'
+  | 'noTripsScheduledToday'
   | 'footerText';
 
 interface LocalScheduleSnapshot {
   loungeId: string;
+  serviceDate?: string;
+  serviceTimeZone?: string;
   updatedAt?: string;
   departuresRaw?: {
     loungeName?: string;
     departures?: Array<{
       time?: string;
       busNo?: string;
+      busCompanyName?: string;
       routeNumber?: string;
       destination?: string;
+      actualDeparture?: string;
       remarks?: string;
       status?: string;
     }>;
@@ -75,8 +82,10 @@ interface LocalScheduleSnapshot {
     arrivals?: Array<{
       time?: string;
       busNo?: string;
+      busCompanyName?: string;
       routeNumber?: string;
       origin?: string;
+      actualArrival?: string;
       remarks?: string;
       status?: string;
     }>;
@@ -114,6 +123,7 @@ interface LocalBroadcastSnapshot {
 interface LocalLoungeAdsSnapshot {
   items?: Array<{
     id?: string;
+    loungeId?: string;
     advertisementName?: string;
     mediaUrl?: string;
     localFile?: string;
@@ -155,6 +165,7 @@ interface LocalAgentStatus {
 })
 export class BidsDisplayComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
+  private changeDetector = inject(ChangeDetectorRef);
   private bridgeService = inject(LocalBridgeService);
   private scheduleService = inject(ScheduleService);
   private trafficLevelService = inject(TrafficLevelService);
@@ -170,6 +181,8 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
   private readonly alternateCycleMs = 30000;
   private readonly minimumAdDurationMs = 5000;
   private readonly loopAdDurationMs = 10000; // Duration for each ad in loop mode (10 seconds)
+  private readonly schedulePageRotationMs = 10000;
+  readonly maxVisibleScheduleRows = 5;
   
   currentTime: string = '';
   currentDate: string = '';
@@ -177,6 +190,10 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
   loungeName: string = '';
   departures: any[] = [];
   arrivals: any[] = [];
+  departurePageIndex = 0;
+  arrivalPageIndex = 0;
+  private displayedServiceDate = '';
+  private displayedServiceTimeZone = '';
   advertisements: KioskAdvertisement[] = [];
   currentlyPlayingAd: KioskAdvertisement | KioskLoungeAd | null = null;
   currentSplitScreenAd: KioskAdvertisement | KioskLoungeAd | null = null; // For split screen ad display
@@ -184,6 +201,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
   kioskMode: boolean = false;
   loading: boolean = false;
   error: string = '';
+  private scheduleUnavailable = false;
   adError: string = '';
   isAdPlaying: boolean = false;
   debugNowUtc: string = '';
@@ -194,6 +212,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
   debugNextSlotCountdown: string = 'N/A';
   private timeInterval: any;
   private scheduleInterval: any;
+  private schedulePageInterval: any;
   private adInterval: any;
   private adCheckInterval: any;
   private languageInterval: any;
@@ -209,11 +228,9 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
   private lastKnownBroadcastSync: string = '';
   private hasLanguageOverride: boolean = false;
   isInternetConnected: boolean = true;
-  displayScale: number = 1;
   currentLanguage: DisplayLanguage = 'en';
   currentDisplayMode: 'both' | 'schedules' | 'ads' = 'both';
   currentLayoutMode: 'split' | 'alternate' = 'split';
-  currentDisplayResolution: string = '1920x1080';
   broadcastsEnabled: boolean = true;
   currentDisplayOrientation: 'landscape' | 'portrait' = 'landscape';
   broadcastMessages: KioskBroadcastMessage[] = [];
@@ -243,12 +260,15 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       arrivals: 'ARRIVALS',
       time: 'TIME',
       busNo: 'BUS NO',
+      busCompany: 'COMPANY',
+      companyTba: 'Company TBA',
       routeNumber: 'ROUTE NUMBER',
       destination: 'DESTINATION',
       origin: 'ORIGIN',
       remarks: 'REMARKS',
       noDepartures: 'No departures available.',
       noArrivals: 'No arrivals available.',
+      noTripsScheduledToday: 'No trips scheduled for today.',
       footerText: 'MAKE HAPPY JOURNEYS'
     },
     si: {
@@ -257,12 +277,15 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       arrivals: 'පැමිණීම්',
       time: 'වේලාව',
       busNo: 'බස් අංකය',
+      busCompany: 'සමාගම',
+      companyTba: 'සමාගම සඳහන් නැත',
       routeNumber: 'මාර්ග අංකය',
       destination: 'ගමනාන්තය',
       origin: 'ආරම්භය',
       remarks: 'සටහන්',
       noDepartures: 'පිටත්වීම් නොමැත.',
       noArrivals: 'පැමිණීම් නොමැත.',
+      noTripsScheduledToday: 'අද දිනට ගමන් වාර සැලසුම් කර නොමැත.',
       footerText: 'සුභ ගමන්!'
     },
     ta: {
@@ -271,12 +294,15 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       arrivals: 'வருகைகள்',
       time: 'நேரம்',
       busNo: 'பஸ் எண்',
+      busCompany: 'நிறுவனம்',
+      companyTba: 'நிறுவனம் குறிப்பிடப்படவில்லை',
       routeNumber: 'வழித்தட எண்',
       destination: 'இலக்கு',
       origin: 'தொடக்கம்',
       remarks: 'குறிப்புகள்',
       noDepartures: 'புறப்பாடுகள் இல்லை.',
       noArrivals: 'வருகைகள் இல்லை.',
+      noTripsScheduledToday: 'இன்றைக்கு பயணங்கள் திட்டமிடப்படவில்லை.',
       footerText: 'மகிழ்ச்சியான பயணம்!'
     }
   };
@@ -327,8 +353,15 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
     }
 
     this.paramsSub = this.route.queryParams.subscribe(params => {
-      this.loungeId = params['loungeId'] || '';
-      this.loungeName = params['loungeName'] || '';
+      const nextLoungeId = params['loungeId'] || '';
+      const nextLoungeName = params['loungeName'] || '';
+      if (this.loungeId && this.loungeId !== nextLoungeId) {
+        this.resetLoungeAdsForLoungeChange();
+        this.setScheduleData([], []);
+        this.scheduleUnavailable = true;
+      }
+      this.loungeId = nextLoungeId;
+      this.loungeName = nextLoungeName;
       
       // Apply settings from URL parameters
       this.applyDisplayMode(params['displayMode']);
@@ -336,7 +369,6 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       this.applyDisplayOrientation(params['displayOrientation']);
       this.applyLanguage(params['language'] || params['lang'], true);
       this.applySyncFrequency(params['syncFrequencySeconds']);
-      this.applyDisplayResolution(params['displayResolution']);
 
       this.loadLanguageFromLocalStatus();
       this.kioskMode = (params['kiosk'] || '').toLowerCase() === 'true';
@@ -348,6 +380,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       this.initialAdsLoaded = false;
       this.fetchSchedule();
       this.startScheduleRefresh();
+      this.startSchedulePageRotation();
       this.startAdvertisementRefresh();
       this.startAdPlaybackWatcher();
       this.startLanguagePolling();
@@ -383,6 +416,9 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
     }
     if (this.adInterval) {
       clearInterval(this.adInterval);
+    }
+    if (this.schedulePageInterval) {
+      clearInterval(this.schedulePageInterval);
     }
     if (this.adCheckInterval) {
       clearInterval(this.adCheckInterval);
@@ -428,6 +464,99 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       clearInterval(this.scheduleInterval);
     }
     this.scheduleInterval = setInterval(() => this.fetchSchedule(true), this.scheduleRefreshMs);
+  }
+
+  private startSchedulePageRotation() {
+    if (this.schedulePageInterval) {
+      clearInterval(this.schedulePageInterval);
+    }
+    this.schedulePageInterval = setInterval(() => {
+      const departurePages = Math.ceil(this.departures.length / this.maxVisibleScheduleRows);
+      const arrivalPages = Math.ceil(this.arrivals.length / this.maxVisibleScheduleRows);
+      if (departurePages > 1) {
+        this.departurePageIndex = (this.departurePageIndex + 1) % departurePages;
+      }
+      if (arrivalPages > 1) {
+        this.arrivalPageIndex = (this.arrivalPageIndex + 1) % arrivalPages;
+      }
+      this.changeDetector.markForCheck();
+    }, this.schedulePageRotationMs);
+  }
+
+  get visibleDepartures(): any[] {
+    return this.getVisiblePage(this.departures, this.departurePageIndex);
+  }
+
+  get visibleArrivals(): any[] {
+    return this.getVisiblePage(this.arrivals, this.arrivalPageIndex);
+  }
+
+  get departureDisplayRows(): Array<any | null> {
+    return this.padVisiblePage(this.visibleDepartures);
+  }
+
+  get arrivalDisplayRows(): Array<any | null> {
+    return this.padVisiblePage(this.visibleArrivals);
+  }
+
+  get departurePageLabel(): string {
+    return this.getPageLabel(this.departures, this.departurePageIndex);
+  }
+
+  get arrivalPageLabel(): string {
+    return this.getPageLabel(this.arrivals, this.arrivalPageIndex);
+  }
+
+  get noTripsScheduledToday(): boolean {
+    return !this.loading &&
+      !this.scheduleUnavailable &&
+      this.departures.length === 0 &&
+      this.arrivals.length === 0;
+  }
+
+  private getVisiblePage<T>(items: T[], pageIndex: number): T[] {
+    const pageCount = Math.ceil(items.length / this.maxVisibleScheduleRows);
+    const page = pageCount > 0 ? pageIndex % pageCount : 0;
+    const start = page * this.maxVisibleScheduleRows;
+    return items.slice(start, start + this.maxVisibleScheduleRows);
+  }
+
+  private padVisiblePage<T>(items: T[]): Array<T | null> {
+    return [
+      ...items,
+      ...Array.from({ length: this.maxVisibleScheduleRows - items.length }, () => null)
+    ];
+  }
+
+  private setScheduleData(
+    departures: any[],
+    arrivals: any[],
+    serviceDate = '',
+    serviceTimeZone = ''
+  ): void {
+    this.departures = departures;
+    this.arrivals = arrivals;
+    this.displayedServiceDate = serviceDate;
+    this.displayedServiceTimeZone = serviceTimeZone;
+    this.departurePageIndex = this.normalizePageIndex(this.departurePageIndex, departures.length);
+    this.arrivalPageIndex = this.normalizePageIndex(this.arrivalPageIndex, arrivals.length);
+    this.changeDetector.markForCheck();
+  }
+
+  private normalizePageIndex(pageIndex: number, itemCount: number): number {
+    const pageCount = Math.ceil(itemCount / this.maxVisibleScheduleRows);
+    return pageCount > 0 ? Math.min(pageIndex, pageCount - 1) : 0;
+  }
+
+  private getPageLabel(items: unknown[], pageIndex: number): string {
+    if (items.length <= this.maxVisibleScheduleRows) {
+      return '';
+    }
+    const pageCount = Math.ceil(items.length / this.maxVisibleScheduleRows);
+    const page = pageIndex % pageCount;
+    const start = page * this.maxVisibleScheduleRows + 1;
+    const end = Math.min(start + this.maxVisibleScheduleRows - 1, items.length);
+    return `${start}-${end} / ${items.length}`;
   }
 
   private startAdvertisementRefresh() {
@@ -863,9 +992,16 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
     this.bridgeService.get<LocalLoungeAdsSnapshot>('lounge-ads').subscribe({
       next: (snapshot) => {
         console.log('[LOUNGE_ADS] Fetched lounge ads snapshot:', snapshot.items?.length || 0, 'items');
-        
+        const currentLoungeId = this.loungeId.trim();
         const mappedAds = (snapshot.items || [])
-          .filter(item => item.isActive !== false && !!(item.mediaUrl || '').trim())
+          .filter(item => {
+            const itemLoungeId = (item.loungeId || '').trim();
+            const isAssignedToCurrentLounge =
+              currentLoungeId !== '' && itemLoungeId === currentLoungeId;
+            return (isAssignedToCurrentLounge || item.isDefaultForAll === true) &&
+              item.isActive !== false &&
+              !!(item.mediaUrl || '').trim();
+          })
           .map((item, index) => {
             const sourceMediaUrl = (item.mediaUrl || '').trim();
             const localFile = (item.localFile || '').trim();
@@ -918,6 +1054,48 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
     });
   }
 
+  private resetLoungeAdsForLoungeChange(): void {
+    const previousLoungeAdIds = new Set(this.loungeSpecificAds.map(ad => ad.id));
+    const isPreviousLoungeAd = (ad: KioskAdvertisement | KioskLoungeAd | null): boolean =>
+      !!ad && previousLoungeAdIds.has(ad.id);
+    const hadActivePreviousLoungeAd =
+      isPreviousLoungeAd(this.currentlyPlayingAd) ||
+      isPreviousLoungeAd(this.currentSplitScreenAd) ||
+      isPreviousLoungeAd(this.currentAlternateAd);
+
+    this.loungeSpecificAds = [];
+    this.loungeFallbackIndex = 0;
+    this.currentLoopAdIndex = 0;
+    this.alternateAdQueue = this.alternateAdQueue.filter(
+      item => !previousLoungeAdIds.has(item.ad.id)
+    );
+
+    if (isPreviousLoungeAd(this.lastKnownAd)) {
+      this.lastKnownAd = null;
+    }
+    if (isPreviousLoungeAd(this.currentlyPlayingAd)) {
+      this.currentlyPlayingAd = null;
+    }
+    if (isPreviousLoungeAd(this.currentSplitScreenAd)) {
+      this.currentSplitScreenAd = null;
+    }
+    if (isPreviousLoungeAd(this.currentAlternateAd)) {
+      this.currentAlternateAd = null;
+    }
+
+    if (hadActivePreviousLoungeAd) {
+      if (this.adPlaybackTimeout) {
+        clearTimeout(this.adPlaybackTimeout);
+        this.adPlaybackTimeout = undefined;
+      }
+      this.isAdPlaying = false;
+    }
+
+    if (this.shouldLoopAds) {
+      this.updateLoopingAd();
+    }
+  }
+
   private resolveLoungeAdMediaUrl(mediaUrl: string): string {
     const trimmed = (mediaUrl || '').trim();
     if (!trimmed) {
@@ -948,11 +1126,14 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
 
         if (this.hasUsableLocalSchedule(schedule)) {
           this.applyLocalScheduleSnapshot(schedule);
+          this.scheduleUnavailable = false;
           this.error = this.getLocalScheduleFreshnessNotice(schedule);
           this.loading = false;
           return;
         }
 
+        this.setScheduleData([], []);
+        this.scheduleUnavailable = true;
         this.fetchLiveScheduleFallback();
       },
       error: () => {
@@ -969,8 +1150,21 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
 
     this.scheduleService.getScheduleByLounge(this.loungeId).subscribe({
       next: (schedule) => {
-        this.departures = schedule.departures;
-        this.arrivals = schedule.arrivals;
+        if (!schedule.serviceDate || !this.isCurrentServiceDay(schedule)) {
+          this.setScheduleData([], []);
+          this.scheduleUnavailable = true;
+          this.error = "Server returned a schedule outside today's service day.";
+          this.loading = false;
+          return;
+        }
+
+        this.setScheduleData(
+          schedule.departures,
+          schedule.arrivals,
+          schedule.serviceDate || '',
+          schedule.serviceTimeZone || ''
+        );
+        this.scheduleUnavailable = false;
         this.error = '';
         if (schedule.loungeName) {
           this.loungeName = schedule.loungeName;
@@ -990,22 +1184,72 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
   private hasUsableLocalSchedule(schedule: LocalScheduleSnapshot): boolean {
     const snapshotLoungeId = (schedule.loungeId || '').trim();
     const requestedLoungeId = (this.loungeId || '').trim();
-    const hasRows = !!schedule.departuresRaw?.departures?.length || !!schedule.arrivalsRaw?.arrivals?.length;
+    const hasSchedulePayload =
+      Array.isArray(schedule.departuresRaw?.departures) &&
+      Array.isArray(schedule.arrivalsRaw?.arrivals);
 
-    if (!hasRows) {
+    if (!hasSchedulePayload || !this.isCurrentServiceDay(schedule, true)) {
       return false;
     }
 
     return !requestedLoungeId || !snapshotLoungeId || snapshotLoungeId === requestedLoungeId;
   }
 
+  private isCurrentServiceDay(
+    schedule: Pick<LocalScheduleSnapshot, 'serviceDate' | 'serviceTimeZone' | 'updatedAt'>,
+    requireUpdatedAt = false
+  ): boolean {
+    const serviceDate = (schedule.serviceDate || '').trim();
+    const serviceTimeZone = (schedule.serviceTimeZone || '').trim();
+    if (serviceDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) {
+        return false;
+      }
+      if (!serviceTimeZone) {
+        return serviceDate === this.getLocalCalendarDate(new Date());
+      }
+
+      try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: serviceTimeZone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).formatToParts(new Date());
+        const year = parts.find(item => item.type === 'year')?.value || '';
+        const month = parts.find(item => item.type === 'month')?.value || '';
+        const day = parts.find(item => item.type === 'day')?.value || '';
+        return `${year}-${month}-${day}` === serviceDate;
+      } catch (error) {
+        console.error(`Invalid schedule service timezone "${serviceTimeZone}".`, error);
+        return false;
+      }
+    }
+
+    if (!schedule.updatedAt) {
+      return !requireUpdatedAt && !serviceTimeZone;
+    }
+
+    const updatedAt = new Date(schedule.updatedAt);
+    return !Number.isNaN(updatedAt.getTime()) &&
+      this.getLocalCalendarDate(updatedAt) === this.getLocalCalendarDate(new Date());
+  }
+
+  private getLocalCalendarDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   private applyLocalScheduleSnapshot(schedule: LocalScheduleSnapshot) {
     const departuresRaw = schedule.departuresRaw?.departures || [];
     const arrivalsRaw = schedule.arrivalsRaw?.arrivals || [];
 
-    this.departures = departuresRaw.map((dep) => ({
+    const departures = departuresRaw.map((dep) => ({
       time: this.toDisplayTime(dep.time),
       busNo: dep.busNo || 'TBA',
+      busCompanyName: dep.busCompanyName || '',
       routeNo: dep.routeNumber || '-',
       destination: dep.destination || '-',
       remarks: dep.remarks || dep.status || '',
@@ -1013,15 +1257,25 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       indicator: this.hasIndicator(dep.remarks || dep.status || '')
     }));
 
-    this.arrivals = arrivalsRaw.map((arr) => ({
-      time: this.toDisplayTime(arr.time),
-      busNo: arr.busNo || 'TBA',
-      routeNo: arr.routeNumber || '-',
-      origin: arr.origin || '-',
-      remarks: arr.remarks || arr.status || '',
-      status: this.getStatusClass(arr.remarks || arr.status || ''),
-      indicator: this.hasIndicator(arr.remarks || arr.status || '')
-    }));
+    const arrivals = arrivalsRaw.map((arr) => {
+      const remarks = arr.actualArrival ? 'At Lounge' : arr.remarks || arr.status || '';
+      return {
+        time: this.toDisplayTime(arr.time),
+        busNo: arr.busNo || 'TBA',
+        busCompanyName: arr.busCompanyName || '',
+        routeNo: arr.routeNumber || '-',
+        origin: arr.origin || '-',
+        remarks,
+        status: arr.actualArrival ? 'at-lounge' : this.getStatusClass(remarks),
+        indicator: this.hasIndicator(remarks)
+      };
+    });
+    this.setScheduleData(
+      departures,
+      arrivals,
+      schedule.serviceDate || this.getLocalCalendarDate(new Date()),
+      schedule.serviceTimeZone || ''
+    );
 
     const loungeNameFromSchedule = schedule.departuresRaw?.loungeName || schedule.arrivalsRaw?.loungeName || '';
     if (loungeNameFromSchedule) {
@@ -1240,16 +1494,21 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
         }
 
         if (!this.hasUsableLocalSchedule(schedule)) {
-          this.error = 'Failed to load schedule data. Offline storage unavailable.';
+          this.setScheduleData([], []);
+          this.scheduleUnavailable = true;
+          this.error = "Unable to load today's schedule.";
           this.loading = false;
           return;
         }
 
         this.applyLocalScheduleSnapshot(schedule);
+        this.scheduleUnavailable = false;
         this.error = this.getLocalScheduleFreshnessNotice(schedule);
         this.loading = false;
       },
       error: () => {
+        this.setScheduleData([], []);
+        this.scheduleUnavailable = true;
         this.error = 'Failed to load schedule data. Offline storage unavailable.';
         if (!this.initialAdsLoaded && this.loungeName.trim()) {
           this.initialAdsLoaded = true;
@@ -1335,9 +1594,6 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
         }
         if (status.syncFrequencySeconds) {
           this.applySyncFrequency(status.syncFrequencySeconds);
-        }
-        if (status.displayResolution) {
-          this.applyDisplayResolution(status.displayResolution);
         }
 
         if (typeof status.broadcastsEnabled === 'boolean') {
@@ -1429,54 +1685,6 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       return null;
     }
     return Math.max(5, Math.floor(parsed));
-  }
-
-  private applyDisplayResolution(raw: string | undefined): void {
-    const normalized = this.normalizeDisplayResolution(raw);
-    if (!normalized) {
-      return;
-    }
-
-    this.currentDisplayResolution = normalized;
-    this.displayScale = this.getDisplayScale(normalized);
-  }
-
-  private normalizeDisplayResolution(raw: string | undefined): string | null {
-    const value = (raw || '').trim().toLowerCase().replace(/\s+/g, '');
-    switch (value) {
-      case '1280x720':
-      case '720p':
-      case 'hd':
-        return '1280x720';
-      case '1920x1080':
-      case '1080p':
-      case 'fullhd':
-        return '1920x1080';
-      case '3840x2160':
-      case '4k':
-      case '4kultrahd':
-        return '3840x2160';
-      case '7680x4320':
-      case '8k':
-      case '8kultrahd':
-        return '7680x4320';
-      default:
-        return null;
-    }
-  }
-
-  private getDisplayScale(resolution: string): number {
-    switch (resolution) {
-      case '1280x720':
-        return 0.667;
-      case '3840x2160':
-        return 2;
-      case '7680x4320':
-        return 4;
-      case '1920x1080':
-      default:
-        return 1;
-    }
   }
 
   private resetAdPlayback(): void {
@@ -1714,6 +1922,9 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
 
   private getStatusClass(remarks: string): string {
     const lowerRemarks = (remarks || '').toLowerCase();
+    if (lowerRemarks.includes('at lounge')) {
+      return 'at-lounge';
+    }
     if (lowerRemarks.includes('departed') || lowerRemarks.includes('arrived')) {
       return lowerRemarks.includes('departed') ? 'departed' : 'arrived';
     }
@@ -1740,7 +1951,9 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       lowerRemarks.includes('delay') ||
       lowerRemarks.includes('expected') ||
       lowerRemarks.includes('on time') ||
-      lowerRemarks.includes('arriving')
+      lowerRemarks.includes('arriving') ||
+      lowerRemarks.includes('arrived') ||
+      lowerRemarks.includes('at lounge')
     );
   }
 
@@ -2096,8 +2309,26 @@ private startAdvertisementPlayback(ad: KioskAdvertisement) {
       this.currentDate = this.currentDate.toUpperCase();
     }
 
+    this.expirePreviousServiceDaySchedule();
     this.updateDebugState();
     this.evaluateBroadcastDisplay();
+  }
+
+  private expirePreviousServiceDaySchedule(): void {
+    if (
+      !this.displayedServiceDate ||
+      this.isCurrentServiceDay({
+        serviceDate: this.displayedServiceDate,
+        serviceTimeZone: this.displayedServiceTimeZone
+      })
+    ) {
+      return;
+    }
+
+    this.setScheduleData([], []);
+    this.scheduleUnavailable = true;
+    this.error = "Unable to load today's schedule.";
+    this.fetchSchedule(true);
   }
 
   private updateDebugState() {
