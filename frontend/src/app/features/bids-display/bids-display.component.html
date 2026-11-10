@@ -33,7 +33,9 @@
 
     <!-- Split Screen Layout: Schedules + Ads side by side -->
     <ng-container *ngIf="currentDisplayMode === 'both' && currentLayoutMode === 'split'">
-      <div class="split-container" [class.vertical]="currentDisplayOrientation === 'portrait'">
+      <div class="split-container"
+           [class.vertical]="currentDisplayOrientation === 'portrait'"
+           [class.ad-free]="!hasActiveAdvertisements">
         <!-- Left Side: Schedules -->
         <div class="split-left glass-panel">
           <div class="schedule-column">

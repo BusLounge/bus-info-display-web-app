@@ -132,6 +132,7 @@ type LoungeAd struct {
 	LoungeID          *string `json:"loungeId,omitempty"`
 	AdvertisementName string  `json:"advertisementName"`
 	MediaURL          string  `json:"mediaUrl"`
+	LocalFile         string  `json:"localFile,omitempty"`
 	MediaType         string  `json:"mediaType"`
 	DurationSeconds   int     `json:"durationSeconds"`
 	Priority          string  `json:"priority"`

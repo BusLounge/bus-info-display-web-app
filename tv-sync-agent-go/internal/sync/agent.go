@@ -240,6 +240,22 @@ func (a *Agent) SyncLoungeAds(ctx context.Context) error {
 		log.Printf("warning: load existing lounge ads snapshot: %v", loadErr)
 	}
 	a.hydrateMissingLoungeMedia(existingSnapshot.Items)
+	existingByID := make(map[string]models.LoungeAd, len(existingSnapshot.Items))
+	for _, item := range existingSnapshot.Items {
+		if item.ID != "" {
+			existingByID[item.ID] = item
+		}
+	}
+	for i := range items {
+		var previous *models.LoungeAd
+		if existing, ok := existingByID[items[i].ID]; ok {
+			previous = &existing
+		}
+		if err := a.cacheRemoteLoungeAdMedia(ctx, &items[i], previous); err != nil {
+			a.setLoungeAdsError(fmt.Errorf("cache lounge ad %s: %w", items[i].ID, err))
+			return err
+		}
+	}
 	items = mergeLocalAndRemoteLoungeAds(existingSnapshot.Items, items)
 	a.hydrateMissingLoungeMedia(items)
 
@@ -259,6 +275,51 @@ func (a *Agent) SyncLoungeAds(ctx context.Context) error {
 	a.status.LastLoungeAdsErr = ""
 	a.status.LoungeAdsCount = len(items)
 	a.mu.Unlock()
+	return nil
+}
+
+func (a *Agent) cacheRemoteLoungeAdMedia(ctx context.Context, ad *models.LoungeAd, previous *models.LoungeAd) error {
+	mediaURL := strings.TrimSpace(ad.MediaURL)
+	if mediaURL == "" {
+		return nil
+	}
+
+	if localFile := localMediaFileFromURL(mediaURL); localFile != "" {
+		ad.LocalFile = localFile
+		return nil
+	}
+
+	parsed, err := url.Parse(mediaURL)
+	if err != nil {
+		return fmt.Errorf("parse media URL: %w", err)
+	}
+	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return nil
+	}
+
+	extension := strings.ToLower(filepath.Ext(parsed.Path))
+	if extension == "" {
+		extension = ".avi"
+	}
+	fileID := filepath.Base(strings.TrimSpace(ad.ID))
+	if fileID == "" || fileID == "." || fileID == string(filepath.Separator) {
+		fileID = "lounge-" + sha256Hex(mediaURL)[:32]
+	}
+	localFile := fileID + extension
+	localPath := filepath.Join(a.mediaDir, localFile)
+
+	if previous != nil &&
+		previous.MediaURL == mediaURL &&
+		previous.LocalFile == localFile &&
+		fileExists(localPath) {
+		ad.LocalFile = localFile
+		return nil
+	}
+
+	if err := a.downloadToFile(ctx, mediaURL, localPath); err != nil {
+		return err
+	}
+	ad.LocalFile = localFile
 	return nil
 }
 
@@ -443,8 +504,14 @@ func (a *Agent) SyncAds(ctx context.Context) error {
 		})
 	}
 
-	if err := cleanupMediaFiles(a.mediaDir, keepFiles); err != nil {
-		log.Printf("warning: cleanup media files: %v", err)
+	loungeSnapshot, loungeErr := a.loadLoungeAds()
+	if loungeErr != nil {
+		log.Printf("warning: skipping media cleanup because lounge ads could not be loaded: %v", loungeErr)
+	} else {
+		addActiveLoungeMediaFiles(keepFiles, loungeSnapshot.Items)
+		if err := cleanupMediaFiles(a.mediaDir, keepFiles); err != nil {
+			log.Printf("warning: cleanup media files: %v", err)
+		}
 	}
 
 	snapshot := models.AdsSnapshot{
@@ -1160,6 +1227,43 @@ func buildHybridTimeSlots(scheduleSeconds, adWindowSeconds, bookedSeconds int) (
 	}
 
 	return slots, available
+}
+
+func addActiveLoungeMediaFiles(keepFiles map[string]bool, loungeAds []models.LoungeAd) {
+	for _, ad := range loungeAds {
+		if !ad.IsActive {
+			continue
+		}
+
+		localFile := strings.TrimSpace(ad.LocalFile)
+		if localFile == "" {
+			localFile = localMediaFileFromURL(ad.MediaURL)
+		}
+		if localFile == "" {
+			localFile = cachedLoungeAdMediaFile(ad)
+		}
+		if localFile != "" {
+			keepFiles[filepath.Base(localFile)] = true
+		}
+	}
+}
+
+func cachedLoungeAdMediaFile(ad models.LoungeAd) string {
+	mediaURL := strings.TrimSpace(ad.MediaURL)
+	parsed, err := url.Parse(mediaURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return ""
+	}
+
+	extension := strings.ToLower(filepath.Ext(parsed.Path))
+	if extension == "" {
+		extension = ".avi"
+	}
+	fileID := filepath.Base(strings.TrimSpace(ad.ID))
+	if fileID == "" || fileID == "." || fileID == string(filepath.Separator) {
+		fileID = "lounge-" + sha256Hex(mediaURL)[:32]
+	}
+	return fileID + extension
 }
 
 func cleanupMediaFiles(dir string, keep map[string]bool) error {

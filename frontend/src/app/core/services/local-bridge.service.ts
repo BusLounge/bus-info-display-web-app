@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { from, Observable, of } from 'rxjs';
+import { from, Observable, of, throwError } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { catchError } from 'rxjs/operators';
 
@@ -56,20 +56,23 @@ export class LocalBridgeService {
       return from(request).pipe(
         catchError(error => {
           console.error(`[BridgeService] IPC fallback failed for ${endpoint}; trying ${url}:`, error);
-          return this.getOverHttp<T>(url);
+          return this.getOverHttp<T>(url, endpoint);
         })
       );
     }
 
     // Fallback: regular HTTP (for browser / dev mode)
     console.log(`[BridgeService] Using HTTP for endpoint: ${endpoint}`);
-    return this.getOverHttp<T>(url);
+    return this.getOverHttp<T>(url, endpoint);
   }
 
-  private getOverHttp<T>(url: string): Observable<T> {
+  private getOverHttp<T>(url: string, endpoint: string): Observable<T> {
     return this.http.get<T>(url).pipe(
       catchError(error => {
         console.error(`[BridgeService] HTTP fallback failed for ${url}:`, error);
+        if (endpoint === 'ads' || endpoint === 'lounge-ads') {
+          return throwError(() => new Error('LOCAL_BRIDGE_OFFLINE'));
+        }
         return of({} as T); // Return an empty object on error to prevent crashes
       })
     );

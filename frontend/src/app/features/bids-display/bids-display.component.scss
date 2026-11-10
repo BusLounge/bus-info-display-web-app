@@ -164,16 +164,39 @@
   gap: 24px;
   height: 100%;
   min-height: 0;
+  transition: gap 320ms ease;
 }
 
 .split-left {
   flex: 0 0 62%;
   min-width: 0;
+  transition: flex-basis 320ms ease, flex-grow 320ms ease;
 }
 
 .split-right {
   flex: 1 1 38%;
   min-width: 0;
+  overflow: hidden;
+  transition: flex-basis 320ms ease, flex-grow 320ms ease, opacity 220ms ease,
+    visibility 0s linear 320ms;
+}
+
+.split-container.ad-free {
+  gap: 0;
+}
+
+.split-container.ad-free .split-left {
+  flex: 1 1 100%;
+}
+
+.split-container.ad-free .split-right {
+  flex: 0 0 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .split-container.vertical {
@@ -184,6 +207,15 @@
 .split-container.vertical .split-right {
   flex: 1 1 50%;
   width: 100%;
+}
+
+.split-container.vertical.ad-free .split-left {
+  flex: 1 1 100%;
+}
+
+.split-container.vertical.ad-free .split-right {
+  flex: 0 0 0;
+  width: 0;
 }
 
 .glass-panel {

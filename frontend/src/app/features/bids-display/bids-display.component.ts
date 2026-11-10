@@ -116,6 +116,7 @@ interface LocalLoungeAdsSnapshot {
     id?: string;
     advertisementName?: string;
     mediaUrl?: string;
+    localFile?: string;
     mediaType?: string;
     durationSeconds?: number;
     isActive?: boolean;
@@ -298,6 +299,10 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
   // Get the current ad for split screen display
   get currentSplitAd(): KioskAdvertisement | KioskLoungeAd | null {
     return this.currentSplitScreenAd;
+  }
+
+  get hasActiveAdvertisements(): boolean {
+    return this.advertisements.length > 0 || this.loungeSpecificAds.length > 0;
   }
 
   // In hybrid alternate layout, ad phases should be pure media without chrome.
@@ -861,22 +866,31 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
         
         const mappedAds = (snapshot.items || [])
           .filter(item => item.isActive !== false && !!(item.mediaUrl || '').trim())
-          .map((item, index) => ({
-            id: item.id || `lounge-ad-${index}`,
-            name: (item.advertisementName || 'Lounge Ad').trim(),
-            mediaUrl: this.resolveLoungeAdMediaUrl(item.mediaUrl || ''),
-            mediaType: this.inferMediaType(item.mediaType, item.mediaUrl || ''),
-            durationMs: Math.max(1000, (Number(item.durationSeconds) || 4) * 1000),
-            isLocalCreated: (item.mediaUrl || '').trim().startsWith('/local/media/'),
-            isDefaultForAll: item.isDefaultForAll === true,
-          }));
+          .map((item, index) => {
+            const sourceMediaUrl = (item.mediaUrl || '').trim();
+            const localFile = (item.localFile || '').trim();
+            return {
+              id: item.id || `lounge-ad-${index}`,
+              name: (item.advertisementName || 'Lounge Ad').trim(),
+              mediaUrl: localFile
+                ? this.advertisementService.getLocalMediaUrl(localFile)
+                : this.resolveLoungeAdMediaUrl(sourceMediaUrl),
+              fallbackMediaUrl: localFile && sourceMediaUrl && !sourceMediaUrl.startsWith('/local/media/')
+                ? this.toAbsoluteMediaUrl(sourceMediaUrl)
+                : undefined,
+              mediaType: this.inferMediaType(item.mediaType, sourceMediaUrl),
+              durationMs: Math.max(1000, (Number(item.durationSeconds) || 4) * 1000),
+              isLocalCreated: sourceMediaUrl.startsWith('/local/media/'),
+              isDefaultForAll: item.isDefaultForAll === true,
+            };
+          });
 
         // When local ads exist, use only those and ignore remote/default lounge ads.
         const localCreatedAds = mappedAds.filter(ad => ad.isLocalCreated);
         const nextLoungeAds = localCreatedAds.length > 0 ? localCreatedAds : mappedAds;
         
+        this.loungeSpecificAds = nextLoungeAds;
         if (nextLoungeAds.length > 0) {
-          this.loungeSpecificAds = nextLoungeAds;
           console.log('[LOUNGE_ADS] Updated loungeSpecificAds with', nextLoungeAds.length, 'active ads');
           const defaultCount = nextLoungeAds.filter(ad => ad.isDefaultForAll).length;
           if (defaultCount > 0) {
@@ -886,11 +900,18 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
           console.warn('[LOUNGE_ADS] No active lounge ads found after filtering');
         }
 
+        if (!this.hasActiveAdvertisements) {
+          this.lastKnownAd = null;
+        }
         if (this.shouldLoopAds) {
           this.updateLoopingAd();
         }
       },
       error: (err) => {
+        if (this.isLocalBridgeOffline(err)) {
+          console.warn('[LocalBridge] Bridge unreachable, retaining existing offline playback state');
+          return;
+        }
         // Keep last known lounge ads to avoid display gaps on transient local bridge errors.
         console.error('[LOUNGE_ADS] Failed to fetch lounge ads:', err.message || err);
       }
@@ -1063,8 +1084,9 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
           })
           .filter((ad): ad is KioskAdvertisement => ad !== null);
 
-        if (filtered.length > 0) {
-          this.advertisements = filtered;
+        this.advertisements = filtered;
+        if (!this.hasActiveAdvertisements) {
+          this.lastKnownAd = null;
         }
         if (skippedAvi > 0) {
           this.adError = `${skippedAvi} AVI ad(s) were skipped because AVI browser playback is unreliable. Use MP4 (H.264/AAC).`;
@@ -1078,10 +1100,12 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
           this.updateLoopingAd();
         }
       },
-      error: () => {
-        this.advertisementService.getTVAdsManifest(this.loungeName).pipe(
-          catchError(() => of([] as TVAdManifestItem[]))
-        ).subscribe({
+      error: (err) => {
+        if (this.isLocalBridgeOffline(err)) {
+          console.warn('[LocalBridge] Bridge unreachable, retaining existing offline playback state');
+          return;
+        }
+        this.advertisementService.getTVAdsManifest(this.loungeName).subscribe({
           next: (remoteItems) => {
             let skippedAvi = 0;
             const filtered = remoteItems
@@ -1115,6 +1139,11 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
 
             if (filtered.length > 0) {
               this.advertisements = filtered;
+            } else if (remoteItems.length === 0) {
+              this.advertisements = [];
+              if (!this.hasActiveAdvertisements) {
+                this.lastKnownAd = null;
+              }
             }
             if (skippedAvi > 0) {
               this.adError = `${skippedAvi} AVI ad(s) were skipped because AVI browser playback is unreliable. Use MP4 (H.264/AAC).`;
@@ -1134,6 +1163,10 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
         });
       }
     });
+  }
+
+  private isLocalBridgeOffline(error: unknown): boolean {
+    return error instanceof Error && error.message === 'LOCAL_BRIDGE_OFFLINE';
   }
 
   private refreshAdsScheduleMetadataFromRemote() {
@@ -1260,8 +1293,9 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
           })
           .filter((ad): ad is KioskAdvertisement => ad !== null);
 
-        if (filtered.length > 0) {
-          this.advertisements = filtered;
+        this.advertisements = filtered;
+        if (!this.hasActiveAdvertisements) {
+          this.lastKnownAd = null;
         }
         if (skippedAvi > 0) {
           this.adError = `${skippedAvi} AVI ad(s) were skipped. Using offline ads storage.`;
