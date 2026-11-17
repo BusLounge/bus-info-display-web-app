@@ -1,0 +1,19 @@
+{
+  "serverUrl": "http://localhost:8083",
+  "loungeId": "dd971205-6d75-468b-98a9-f540466d3186",
+  "loungeGroup": "Ceynaturia Longe",
+  "tvPurpose": "both",
+  "scheduleIntervalCron": "*/1 * * * *",
+  "adsIntervalCron": "*/15 * * * *",
+  "broadcastIntervalCron": "*/1 * * * *",
+  "localBridgePort": 3001,
+  "requestTimeoutMs": 30000,
+  "downloadTimeoutMs": 120000,
+  "storeDir": "./local-store",
+  "language": "en",
+  "displayMode": "both",
+  "layoutMode": "full-screen-alternate",
+  "syncFrequencySeconds": 5,
+  "displayResolution": "1920x1080",
+  "displayOrientation": "landscape"
+}

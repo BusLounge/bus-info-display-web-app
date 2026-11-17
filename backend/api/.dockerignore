@@ -1,0 +1,11 @@
+.env
+.env.*
+bin/
+*.exe
+Tools/
+sample_training_data/
+*.md
+*.sql
+migrations/
+Dockerfile
+.dockerignore

@@ -1,0 +1,38 @@
+# Server-side services. Run from this directory:
+#   docker compose up --build
+#
+# Secrets and the database URL come from api/.env (not baked into any image).
+
+services:
+  api:
+    build: ./api
+    env_file: ./api/.env
+    environment:
+      PORT: "8083"
+      MEDIA_DIR: /data/media
+      ETA_ENGINE_URL: http://eta-engine:8000
+    ports:
+      - "8083:8083"   # kiosks and sync agents connect here
+    volumes:
+      - media:/data/media
+    restart: unless-stopped
+
+  admin-frontend:
+    build: ./admin-frontend
+    depends_on:
+      - api
+    ports:
+      - "4300:80"     # http://localhost:4300
+    restart: unless-stopped
+
+  # Optional: start with `docker compose --profile eta up --build`.
+  # It needs the trained model files in eta_engine/ to make predictions;
+  # without it the API uses its built-in ETA fallback.
+  eta-engine:
+    profiles: ["eta"]
+    build: ./eta_engine
+    env_file: ./api/.env
+    restart: unless-stopped
+
+volumes:
+  media:

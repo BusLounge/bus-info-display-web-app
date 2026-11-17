@@ -9,9 +9,9 @@ Keep the existing periodic sync running as the offline/reconnect recovery path.
 
 The implementation is isolated in:
 
-- `backend/internal/websocket/hub.go`
-- `backend/internal/websocket/client.go`
-- `tv-sync-agent-go/internal/websocket/agent_ws_client.go`
+- `backend/api/internal/websocket/hub.go`
+- `backend/api/internal/websocket/client.go`
+- `kiosk/tv-sync-agent-go/internal/websocket/agent_ws_client.go`
 
 No existing application files are changed by this optional feature. Both Go
 modules need Gorilla WebSocket before building these packages:
@@ -29,7 +29,7 @@ They are intentionally not run as part of adding the standalone source files.
 
 ## Register the backend endpoint
 
-In `backend/cmd/server/main.go`, import the new package with an alias:
+In `backend/api/cmd/server/main.go`, import the new package with an alias:
 
 ```go
 wsupdates "bus-schedule-lounge/internal/websocket"
@@ -90,7 +90,7 @@ sync still catches the change.
 ## Enable the agent client
 
 The agent client accepts the existing sync agent as its snapshot refresher.
-In `tv-sync-agent-go/cmd/agent/main.go`, add an import:
+In `kiosk/tv-sync-agent-go/cmd/agent/main.go`, add an import:
 
 ```go
 wsupdates "tv-sync-agent-go/internal/websocket"

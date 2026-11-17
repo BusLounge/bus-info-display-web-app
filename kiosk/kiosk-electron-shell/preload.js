@@ -1,0 +1,23 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('electron', {
+  submitCredentials: (credentials) => ipcRenderer.send('admin-credentials', credentials),
+  openAdmin: () => ipcRenderer.send('open-admin'),
+  exitKiosk: () => ipcRenderer.send('exit-kiosk'),
+  closeAdmin: () => ipcRenderer.send('close-admin'),
+  login: (credentials) => ipcRenderer.send('login', credentials),
+  onLoginResult: (callback) => ipcRenderer.on('login-result', (_event, value) => callback(value)),
+  onDeviceUpdate: (callback) => ipcRenderer.on('device-update', (_event, value) => callback(value)),
+});
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
+  getAds: () => ipcRenderer.invoke('bridge:get-ads'),
+  getBroadcasts: () => ipcRenderer.invoke('bridge:get-broadcasts'),
+  getLoungeAds: () => ipcRenderer.invoke('bridge:get-lounge-ads'),
+  onScheduleSnapshotUpdated: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('schedule-snapshot-updated', listener);
+    return () => ipcRenderer.removeListener('schedule-snapshot-updated', listener);
+  }
+});
