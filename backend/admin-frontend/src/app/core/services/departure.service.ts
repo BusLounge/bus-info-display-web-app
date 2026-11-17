@@ -13,7 +13,6 @@ export interface DepartureInfo {
   destination: string;
   currentLatitude: number | null;
   currentLongitude: number | null;
-  actualDeparture: string | null;
   eta: string | null;
   status: string;
   remarks: string;

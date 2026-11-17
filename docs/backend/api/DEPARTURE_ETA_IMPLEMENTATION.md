@@ -1,5 +1,7 @@
 # Departure Management - Lounge-Specific ETA Implementation
 
+> **Superseded.** Departures are now the arrival estimate plus a 3-minute stopover, calculated together with arrivals. See [ETA_IMPLEMENTATION.md](../../ETA_IMPLEMENTATION.md).
+
 ## Objective
 Implement lounge-specific departure time calculations where:
 **Departure ETA = Arrival ETA + Stopover Time**

@@ -1,12 +1,8 @@
 package services
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
+	"context"
 	"math"
-	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -15,41 +11,9 @@ import (
 	"bus-schedule-lounge/pkg/utils"
 )
 
-type ETARequest struct {
-	MasterRouteID     string `json:"master_route_id"`
-	LoungeID          string `json:"lounge_id"`
-	DepartureDatetime string `json:"departure_datetime"`
-	DriverID          string `json:"driver_id"`
-	BusID             string `json:"bus_id"`
-}
-
-type BatchETARequest struct {
-	Requests []ETARequest `json:"requests"`
-}
-
-type ETAResponseData struct {
-	MasterRouteID string `json:"master_route_id"`
-	LoungeID      string `json:"lounge_id"`
-	ETA           string `json:"eta"`
-	ETD           string `json:"etd"`
-}
-
-type BatchETAResponseItem struct {
-	Status string          `json:"status"`
-	Data   ETAResponseData `json:"data"`
-}
-
-// etaEngineURL returns the base URL of the Python ETA engine. Set
-// ETA_ENGINE_URL when the engine does not run on the same host as the API.
-func etaEngineURL() string {
-	if url := strings.TrimRight(strings.TrimSpace(os.Getenv("ETA_ENGINE_URL")), "/"); url != "" {
-		return url
-	}
-	return "http://localhost:8000"
-}
-
 type ArrivalService struct {
 	repo        *database.ArrivalRepository
+	board       *LoungeBoardService
 	etaProfiles map[string]float64
 	location    *time.Location
 }
@@ -57,9 +21,10 @@ type ArrivalService struct {
 func NewArrivalService(
 	repo *database.ArrivalRepository,
 	location *time.Location,
+	board *LoungeBoardService,
 	etaProfiles ...map[string]float64,
 ) *ArrivalService {
-	service := &ArrivalService{repo: repo, location: location}
+	service := &ArrivalService{repo: repo, board: board, location: location}
 	if len(etaProfiles) > 0 {
 		service.etaProfiles = etaProfiles[0]
 	}
@@ -67,6 +32,7 @@ func NewArrivalService(
 }
 
 // GetAllLoungeArrivals gets arrivals for all lounges with calculated remarks
+// (admin Arrival Management page).
 func (s *ArrivalService) GetAllLoungeArrivals() ([]models.LoungeArrivalResponse, error) {
 	start, end, err := currentServiceDayBounds(time.Now(), s.location)
 	if err != nil {
@@ -84,105 +50,114 @@ func (s *ArrivalService) GetAllLoungeArrivals() ([]models.LoungeArrivalResponse,
 	return s.groupByLounge(arrivals, start.Format("2006-01-02"), s.location.String()), nil
 }
 
-// GetArrivalsByLoungeID gets arrivals for a specific lounge with calculated remarks
+// GetArrivalsByLoungeID returns the arrivals board for one lounge (used by the kiosks):
+// buses due from 15 minutes ago to 6 hours ahead, earliest first, at most 10.
 func (s *ArrivalService) GetArrivalsByLoungeID(loungeID string) (*models.LoungeArrivalResponse, error) {
-	start, end, err := currentServiceDayBounds(time.Now(), s.location)
-	if err != nil {
-		return nil, err
-	}
-	arrivals, err := s.repo.GetArrivalsByLoungeID(loungeID, start, end)
+	board, err := s.board.Board(context.Background(), loungeID)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(arrivals) == 0 {
-		return &models.LoungeArrivalResponse{
-			LoungeID:        loungeID,
-			LoungeName:      "",
-			ServiceDate:     start.Format("2006-01-02"),
-			ServiceTimeZone: s.location.String(),
-			Arrivals:        []models.ArrivalInfo{},
-		}, nil
+	response := &models.LoungeArrivalResponse{
+		LoungeID:        loungeID,
+		LoungeName:      board.LoungeName,
+		ServiceDate:     board.ServiceDate,
+		ServiceTimeZone: board.ServiceTimeZone,
+		Arrivals:        []models.ArrivalInfo{},
 	}
-
-	// Process arrivals and calculate remarks
-	s.processArrivals(arrivals)
-
-	return &models.LoungeArrivalResponse{
-		LoungeID:        arrivals[0].LoungeID,
-		LoungeName:      arrivals[0].LoungeName,
-		ServiceDate:     start.Format("2006-01-02"),
-		ServiceTimeZone: s.location.String(),
-		Arrivals:        arrivals,
-	}, nil
+	for _, entry := range board.Arrivals() {
+		response.Arrivals = append(response.Arrivals, arrivalInfoFromETA(entry, board.Now, s.location))
+	}
+	return response, nil
 }
 
-// processArrivals calculates dynamic ETA, remarks and time display for each arrival
+func arrivalInfoFromETA(entry LoungeTripETA, now time.Time, location *time.Location) models.ArrivalInfo {
+	trip := entry.Trip
+	arrival := entry.ArrivalETA
+	departure := trip.DepartureTime
+	offset := int(math.Round(entry.MinutesFromDeparture))
+	return models.ArrivalInfo{
+		LoungeID:             trip.LoungeID,
+		LoungeName:           trip.LoungeName,
+		LoungeLat:            trip.LoungeLat,
+		LoungeLng:            trip.LoungeLng,
+		ActiveTripID:         trip.ActiveTripID,
+		MasterRouteID:        trip.MasterRouteID,
+		BusID:                trip.BusID,
+		DriverID:             trip.DriverID,
+		BusNumber:            busNumberOrTBA(trip.BusNumber),
+		BusCompanyName:       trip.BusCompanyName,
+		RouteNumber:          trip.RouteNumber,
+		Origin:               trip.Origin,
+		Destination:          trip.Destination,
+		CurrentLat:           trip.CurrentLat,
+		CurrentLng:           trip.CurrentLng,
+		CurrentSpeedKmh:      trip.CurrentSpeedKmh,
+		LastLocationUpdate:   trip.LastLocationUpdate,
+		OffsetMinutes:        &offset,
+		ETA:                  &arrival,
+		DepartureTime:        &departure,
+		Status:               tripStatusOrNotStarted(trip.ActiveTripStatus),
+		Remarks:              arrivalRemark(arrival, now, location),
+		TimeDisplay:          clockTime(arrival, location),
+		DistanceKm:           entry.DistanceKm,
+		CalculatedETAMinutes: entry.MinutesFromDeparture,
+		ETASource:            entry.Source,
+	}
+}
+
+func busNumberOrTBA(busNumber string) string {
+	if strings.TrimSpace(busNumber) == "" {
+		return "Bus TBA"
+	}
+	return busNumber
+}
+
+func tripStatusOrNotStarted(status string) string {
+	if strings.TrimSpace(status) == "" {
+		return "not_started"
+	}
+	return status
+}
+
+// processArrivals calculates ETA, remarks and time display for each arrival
+// (admin Arrival Management page).
 func (s *ArrivalService) processArrivals(arrivals []models.ArrivalInfo) {
 	now := time.Now()
 
-	// Prepare ETA engine batch request
-	var batchReq BatchETARequest
-	var validIndices []int
-
+	// Optional Python ETA engine (off unless ETA_ENGINE_ENABLED=true).
+	var requests []ETARequest
+	var requestIndexes []int
 	for i, arrival := range arrivals {
-		if arrival.ActualArrival == nil && arrival.DepartureTime != nil && arrival.MasterRouteID != "" {
-			req := ETARequest{
+		if arrival.DepartureTime != nil && arrival.MasterRouteID != "" {
+			requests = append(requests, ETARequest{
 				MasterRouteID:     arrival.MasterRouteID,
 				LoungeID:          arrival.LoungeID,
 				DepartureDatetime: arrival.DepartureTime.Format(time.RFC3339),
 				DriverID:          arrival.DriverID,
 				BusID:             arrival.BusID,
-			}
-			batchReq.Requests = append(batchReq.Requests, req)
-			validIndices = append(validIndices, i)
+			})
+			requestIndexes = append(requestIndexes, i)
 		}
 	}
-
-	// Call ML engine
 	mlPredictions := make(map[int]*time.Time)
-	
-	if len(batchReq.Requests) > 0 {
-		if jsonData, err := json.Marshal(batchReq); err == nil {
-			resp, err := http.Post(etaEngineURL()+"/api/v1/predict_batch", "application/json", bytes.NewBuffer(jsonData))
-			if err == nil {
-				defer resp.Body.Close()
-				if resp.StatusCode == http.StatusOK {
-					var batchResp []BatchETAResponseItem
-					if err := json.NewDecoder(resp.Body).Decode(&batchResp); err == nil {
-						for i, resItem := range batchResp {
-							if resItem.Status == "success" {
-								if parsedETA, err := time.Parse(time.RFC3339, resItem.Data.ETA); err == nil {
-									mlPredictions[validIndices[i]] = &parsedETA
-								}
-							}
-						}
-					}
-				}
-			}
+	for i, prediction := range predictWithETAEngine(requests) {
+		if prediction != nil {
+			mlPredictions[requestIndexes[i]] = prediction
 		}
 	}
 
 	for i := range arrivals {
 		arrival := &arrivals[i]
 
-		// If already arrived
-		if arrival.ActualArrival != nil {
-			arrival.Remarks = "Arrived"
-			arrival.TimeDisplay = arrival.ActualArrival.Format("15:04")
-			continue
-		}
-
-		// Calculate dynamic ETA if we have valid GPS data for BOTH bus and lounge
 		hasGPSData := arrival.CurrentLat != nil && arrival.CurrentLng != nil &&
 			arrival.LoungeLat != nil && arrival.LoungeLng != nil &&
 			utils.ValidateCoordinates(*arrival.CurrentLat, *arrival.CurrentLng) &&
 			utils.ValidateCoordinates(*arrival.LoungeLat, *arrival.LoungeLng)
 
 		if mlETA, ok := mlPredictions[i]; ok {
-			// ETA Engine priority
 			arrival.ETA = mlETA
-			// Set distance for UI if possible (from ML or just fallback distance)
+			arrival.ETASource = ETASourceETAEngine
 			if hasGPSData {
 				arrival.DistanceKm = utils.HaversineDistance(*arrival.CurrentLat, *arrival.CurrentLng, *arrival.LoungeLat, *arrival.LoungeLng)
 			}
@@ -206,17 +181,11 @@ func (s *ArrivalService) processArrivals(arrivals []models.ArrivalInfo) {
 			arrival.DistanceKm = distance
 			arrival.CalculatedETAMinutes = currentETAMinutes
 
-			// Step 4: Apply offset adjustment if available for THIS lounge
-			finalETAMinutes := currentETAMinutes
-			if arrival.OffsetMinutes != nil && *arrival.OffsetMinutes > 0 {
-				// Use historical offset to smooth ETA
-				previousETAMinutes := float64(*arrival.OffsetMinutes)
-				finalETAMinutes = utils.CalculateAdjustedETA(previousETAMinutes, currentETAMinutes)
-			}
-
-			// Calculate new ETA timestamp specific to THIS lounge
-			newETA := now.Add(time.Duration(finalETAMinutes) * time.Minute)
+			// Live ETA counts from now. (The schedule offset is no longer added on top:
+			// it measures time from the start of the route, not from the bus's position.)
+			newETA := now.Add(minutesToDuration(currentETAMinutes))
 			arrival.ETA = &newETA
+			arrival.ETASource = ETASourceLiveGPS
 		} else if routeDuration, ok := calculateRoadTypeRouteDuration(
 			arrival.RouteSegments,
 			s.etaProfiles,
@@ -224,45 +193,23 @@ func (s *ArrivalService) processArrivals(arrivals []models.ArrivalInfo) {
 			routeETA := arrival.DepartureTime.Add(routeDuration)
 			arrival.CalculatedETAMinutes = routeDuration.Minutes()
 			arrival.ETA = &routeETA
+			arrival.ETASource = ETASourceRoadType
 		} else if arrival.ETA == nil && arrival.DepartureTime != nil && arrival.OffsetMinutes != nil {
-			// Fallback: Use route offset from departure time for THIS specific lounge
-			// This ensures each lounge gets its own ETA based on its offset
 			loungeSpecificETA := arrival.DepartureTime.Add(time.Duration(*arrival.OffsetMinutes) * time.Minute)
 			arrival.ETA = &loungeSpecificETA
+			arrival.ETASource = ETASourceStopOffsets
+		} else if arrival.ETA != nil {
+			arrival.ETASource = ETASourceStopOffsets
 		}
 
-		// If still no ETA available, show status
 		if arrival.ETA == nil {
 			arrival.Remarks = "In Transit"
 			arrival.TimeDisplay = "-"
 			continue
 		}
 
-		// Calculate time difference for THIS lounge's ETA
-		diff := arrival.ETA.Sub(now)
-		minutesDiff := int(diff.Minutes())
-
-		// Set time display
-		arrival.TimeDisplay = arrival.ETA.Format("15:04")
-
-		// Calculate remarks based on time difference
-		if minutesDiff < -5 {
-			// Bus is delayed (more than 5 minutes past ETA)
-			delayMinutes := -minutesDiff
-			arrival.Remarks = fmt.Sprintf("Delayed %d min", delayMinutes)
-		} else if minutesDiff <= 0 {
-			// ETA is now or just passed (within 5 minutes)
-			arrival.Remarks = "Arriving Now"
-		} else if minutesDiff <= 5 {
-			// Within 5 minutes
-			arrival.Remarks = fmt.Sprintf("Arriving in %d min", minutesDiff)
-		} else if minutesDiff <= 15 {
-			// Within 15 minutes
-			arrival.Remarks = fmt.Sprintf("Expected in %d min", minutesDiff)
-		} else {
-			// More than 15 minutes away
-			arrival.Remarks = fmt.Sprintf("Expected at %s", arrival.ETA.Format("15:04"))
-		}
+		arrival.TimeDisplay = clockTime(*arrival.ETA, s.location)
+		arrival.Remarks = arrivalRemark(*arrival.ETA, now, s.location)
 	}
 }
 

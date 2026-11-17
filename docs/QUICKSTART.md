@@ -263,7 +263,7 @@ npm run dist
 
 This rebuilds `bin\agent.exe` and `www\` and produces an installer in `dist\`. Run it on Windows: on a Mac, the agent would be built for macOS but named `agent.exe`.
 
-The Windows lockdown scripts are described in `kiosk/kiosk-electron-shell/WINDOWS_KIOSK_HARDENING.md`. Only apply them to a dedicated kiosk machine, never your development computer.
+The Windows lockdown scripts are described in `docs/kiosk/kiosk-electron-shell/WINDOWS_KIOSK_HARDENING.md`. Only apply them to a dedicated kiosk machine, never your development computer.
 
 ---
 

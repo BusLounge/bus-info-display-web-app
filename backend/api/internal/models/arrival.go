@@ -23,13 +23,14 @@ type ArrivalInfo struct {
 	LastLocationUpdate   *time.Time `json:"lastLocationUpdate" db:"last_location_update"`
 	OffsetMinutes        *int       `json:"offsetMinutes" db:"arrival_time_offset_minutes"`
 	ETA                  *time.Time `json:"eta" db:"estimated_arrival_time"`
-	ActualArrival        *time.Time `json:"actualArrival" db:"actual_arrival_time"`
 	DepartureTime        *time.Time `json:"departureTime" db:"departure_datetime"`
 	Status               string     `json:"status" db:"status"`
 	Remarks              string     `json:"remarks"`
 	TimeDisplay          string     `json:"time"`
 	DistanceKm           float64    `json:"distanceKm"`
 	CalculatedETAMinutes float64    `json:"calculatedETAMinutes"`
+	// Where the ETA came from: live-gps, eta-engine, stop-offsets, trip-duration, route-duration or road-type.
+	ETASource            string         `json:"etaSource,omitempty"`
 	RouteSegments        []RouteSegment `json:"-"`
 }
 

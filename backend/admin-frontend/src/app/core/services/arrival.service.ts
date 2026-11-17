@@ -14,7 +14,6 @@ export interface ArrivalInfo {
   currentLatitude: number | null;
   currentLongitude: number | null;
   eta: string | null;
-  actualArrival: string | null;
   status: string;
   remarks: string;
   time: string;

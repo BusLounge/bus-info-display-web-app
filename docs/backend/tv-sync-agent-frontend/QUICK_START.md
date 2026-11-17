@@ -7,7 +7,7 @@ Get up and running with the TV Sync Agent Frontend in 5 minutes!
 Make sure you have:
 - **Node.js** v18+ installed ([Download](https://nodejs.org/))
 - **npm** v11+ (comes with Node.js)
-- **tv-sync-agent-go** backend running ([Backend Setup](../bus-info-display-web-app/tv-sync-agent-go/README_TV_BOX_SETUP.md))
+- **tv-sync-agent-go** backend running ([Backend Setup](../../kiosk/tv-sync-agent-go/README_TV_BOX_SETUP.md))
 
 ## Installation (3 steps)
 
@@ -103,7 +103,7 @@ npm install
 
 ## What's Next?
 
-- 📚 Read the full [README.md](./README.md)
+- 📚 Read the full [README.md](README.md)
 - 🔧 Configure your backend connection
 - 🎨 Customize colors and branding
 - 📊 Explore the analytics features
@@ -111,7 +111,7 @@ npm install
 
 ## Need Help?
 
-- Check the [README](./README.md) for detailed documentation
+- Check the [README](README.md) for detailed documentation
 - Review backend logs for API errors
 - Open an issue in the repository
 

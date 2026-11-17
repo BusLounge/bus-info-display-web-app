@@ -1,5 +1,7 @@
 # Lounge-Specific ETA Calculation - Implementation Summary
 
+> **Superseded.** This describes an earlier version of the kiosk ETA calculation. The current design is in [ETA_IMPLEMENTATION.md](../../ETA_IMPLEMENTATION.md).
+
 ## Problem Identified
 All lounges on the same route were displaying identical ETA times (13:13), which is incorrect. Each lounge should display a different ETA based on its position along the route.
 

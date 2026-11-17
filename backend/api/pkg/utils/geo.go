@@ -57,18 +57,6 @@ func CalculateETAMinutes(distance float64, speedKmh float64) float64 {
 	return etaMinutes
 }
 
-// CalculateAdjustedETA applies smoothing adjustment to ETA
-// previousETAMinutes: historical offset from route data
-// currentETAMinutes: real-time calculated ETA
-// Returns adjusted ETA in minutes
-func CalculateAdjustedETA(previousETAMinutes float64, currentETAMinutes float64) float64 {
-	// ETA = previous ETA + (current ETA / 2)
-	// This helps stabilize ETA using historical route timing
-	adjustedETA := previousETAMinutes + (currentETAMinutes / 2.0)
-
-	return adjustedETA
-}
-
 // degreesToRadians converts degrees to radians
 func degreesToRadians(degrees float64) float64 {
 	return degrees * math.Pi / 180.0

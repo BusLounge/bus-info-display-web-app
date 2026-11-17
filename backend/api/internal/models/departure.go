@@ -17,7 +17,6 @@ type DepartureInfo struct {
 	CurrentLat             *float64   `json:"currentLatitude" db:"current_latitude"`
 	CurrentLng             *float64   `json:"currentLongitude" db:"current_longitude"`
 	ScheduledDepartureTime *time.Time `json:"scheduledDeparture" db:"departure_datetime"`
-	ActualDeparture        *time.Time `json:"actualDeparture" db:"actual_departure_time"`
 	ArrivalETA             *time.Time `json:"arrivalEta" db:"arrival_eta"`
 	DepartureETA           *time.Time `json:"departureEta" db:"departure_eta"`
 	StopoverMinutes        *int       `json:"stopoverMinutes" db:"stopover_minutes"`
@@ -26,6 +25,8 @@ type DepartureInfo struct {
 	Remarks                string     `json:"remarks"`
 	TimeDisplay            string     `json:"time"`
 	DepartureTime          *time.Time `json:"departureTime" db:"trip_departure_datetime"`
+	// Where the arrival ETA (and so the departure) came from; see ArrivalInfo.ETASource.
+	ETASource string `json:"etaSource,omitempty"`
 }
 
 // LoungeDepartureResponse represents departures grouped by lounge

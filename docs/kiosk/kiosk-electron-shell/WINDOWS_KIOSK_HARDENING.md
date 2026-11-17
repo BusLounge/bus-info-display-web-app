@@ -4,7 +4,7 @@ This guide is a deployment example for the Windows account that runs the kiosk. 
 
 ## What the script changes
 
-Run [windows-kiosk-hardening.ps1](windows-kiosk-hardening.ps1) from an elevated PowerShell session. It resolves the named kiosk account and edits only that account's loaded or offline `NTUSER.DAT` hive; it does not edit the current administrator's profile:
+Run [windows-kiosk-hardening.ps1](../../../kiosk/kiosk-electron-shell/windows-kiosk-hardening.ps1) from an elevated PowerShell session. It resolves the named kiosk account and edits only that account's loaded or offline `NTUSER.DAT` hive; it does not edit the current administrator's profile:
 
 - `Policies\System\DisableTaskMgr = 1` disables Task Manager for that user.
 - `Policies\System\DisableLockWorkstation = 1` removes the Lock Computer option for that user.
@@ -69,7 +69,7 @@ Do not replace `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Shell
 
 ### Shell Launcher provisioning template
 
-The project includes [provision-shell-launcher.ps1](provision-shell-launcher.ps1) as a per-account Shell Launcher template for the packaged desktop Electron app. It requires an elevated Windows PowerShell session and a Windows edition with the `Client-EmbeddedShellLauncher` optional feature. Review the script and test it on a non-production device before using it on a fleet.
+The project includes [provision-shell-launcher.ps1](../../../kiosk/kiosk-electron-shell/provision-shell-launcher.ps1) as a per-account Shell Launcher template for the packaged desktop Electron app. It requires an elevated Windows PowerShell session and a Windows edition with the `Client-EmbeddedShellLauncher` optional feature. Review the script and test it on a non-production device before using it on a fleet.
 
 1. Install the signed/approved Electron application at its final stable path. Create a dedicated standard kiosk account and verify that a separate administrator account can sign in normally.
 2. If Shell Launcher is not enabled, run Apply once to enable the Windows optional feature, restart, then rerun Apply. Example:
@@ -173,10 +173,10 @@ Do not apply a generic “debloat” or service-disabling script to an industria
 
 ## Electron and Go startup
 
-The Windows kiosk runtime is started by [main.js](main.js), separately from Windows shell provisioning:
+The Windows kiosk runtime is started by [main.js](../../../kiosk/kiosk-electron-shell/main.js), separately from Windows shell provisioning:
 
-- `npm run dist` runs [build.js](build.js). It builds the Go agent as `bin\agent.exe`, builds Angular into `www`, then packages the Electron app with electron-builder.
-- The electron-builder configuration in [package.json](package.json) copies `bin` and `www` into the packaged application's resources directory. In packaged mode, `main.js` resolves these from `process.resourcesPath`; during development, it resolves them relative to the Electron project directory (`__dirname`). Keep these source and destination folder names aligned. Missing or misplaced assets can prevent the Go process or display page from starting after installation.
+- `npm run dist` runs [build.js](../../../kiosk/kiosk-electron-shell/build.js). It builds the Go agent as `bin\agent.exe`, builds Angular into `www`, then packages the Electron app with electron-builder.
+- The electron-builder configuration in [package.json](../../../kiosk/kiosk-electron-shell/package.json) copies `bin` and `www` into the packaged application's resources directory. In packaged mode, `main.js` resolves these from `process.resourcesPath`; during development, it resolves them relative to the Electron project directory (`__dirname`). Keep these source and destination folder names aligned. Missing or misplaced assets can prevent the Go process or display page from starting after installation.
 - During Electron's `ready` lifecycle, the app starts its local Express server when `www` exists, starts the Go agent, and then creates the kiosk window. Packaged mode starts the bundled `process.resourcesPath\bin\agent.exe`. Development mode starts a local `bin\agent.exe` if present, otherwise it runs the Go source with `go run`.
 - Packaged configuration is stored under Electron's per-user `app.getPath('userData')`, not beside the installed executable. Ensure the kiosk account can write to its user-data and local-store directories.
 - On Electron `before-quit`, the app waits for the Go child process/tree and the Express server to stop. Windows uses `taskkill` with a termination fallback; the app logs backend startup errors and exits.
@@ -188,27 +188,27 @@ The current startup launches the Go process before creating the kiosk window, bu
 The kiosk schedule flow prefers the Go agent's local snapshot so it can continue displaying the last synchronized schedule during a network outage:
 
 - The Go agent fetches lounge departures and arrivals from the backend on `scheduleIntervalCron`, writes the response atomically to `storeDir/schedule.json`, and serves that snapshot at `http://127.0.0.1:<localBridgePort>/local/schedule`. The default local bridge port is `3000`; deployments may configure another port.
-- Angular's `LocalBridgeService` requests the `schedule` endpoint through Electron IPC. The `bridge:get` handler in [main.js](main.js) first requests `/local/schedule` with a three-second timeout. If the agent endpoint is unavailable or returns an error, Electron reads `schedule.json` relative to the agent config directory and its configured `storeDir`. If neither source is available, IPC rejects the request so Angular can continue to its remote API fallback.
-- The kiosk uses a local snapshot when it contains rows for the requested lounge. Otherwise it requests the backend arrivals and departures APIs. [schedule.service.ts](../frontend/src/app/core/services/schedule.service.ts) propagates request errors instead of converting them to successful empty schedules, and it does not emit temporary empty rows while requests are pending. This allows [bids-display.component.ts](../frontend/src/app/features/bids-display/bids-display.component.ts) to retry from local storage without clearing rows already on screen.
+- Angular's `LocalBridgeService` requests the `schedule` endpoint through Electron IPC. The `bridge:get` handler in [main.js](../../../kiosk/kiosk-electron-shell/main.js) first requests `/local/schedule` with a three-second timeout. If the agent endpoint is unavailable or returns an error, Electron reads `schedule.json` relative to the agent config directory and its configured `storeDir`. If neither source is available, IPC rejects the request so Angular can continue to its remote API fallback.
+- The kiosk uses a local snapshot when it contains rows for the requested lounge. Otherwise it requests the backend arrivals and departures APIs. [schedule.service.ts](../../../kiosk/kiosk-frontend/src/app/core/services/schedule.service.ts) propagates request errors instead of converting them to successful empty schedules, and it does not emit temporary empty rows while requests are pending. This allows [bids-display.component.ts](../../../kiosk/kiosk-frontend/src/app/features/bids-display/bids-display.component.ts) to retry from local storage without clearing rows already on screen.
 - Local snapshots include `updatedAt`. The display warns when a snapshot is more than ten minutes old, or when the timestamp is missing or invalid. The ten-minute threshold assumes the default five-minute agent schedule sync interval; adjust the threshold if a deployment configures a longer interval. A genuinely successful API response with no rows still renders the normal no-schedule state.
 
 ### Route road-type normalization
 
 Route segments store road classification in `route_segments.road_type`; this is not a separate lookup table. The frontend and Go route service use uppercase canonical values: `HIGHWAY`, `EXPRESSWAY`, `ARTERIAL`, `COLLECTOR`, `URBAN`, `RURAL`, `LOCAL`, `SERVICE`, and `UNKNOWN`. The Go service trims and uppercases input; legacy ambiguous values such as `mixed` and `suburban`, blank values, and omitted values fall back to `UNKNOWN` rather than being guessed.
 
-Apply [migration 008](../backend/migrations/008_normalize_route_segment_road_types.sql) to backfill existing NULL, blank, lowercase, and unsupported values; set the database default to `UNKNOWN`; enforce `NOT NULL`; and constrain stored values to the canonical set. The Go repository also maps legacy SQL NULLs to `UNKNOWN` while deployments roll out the migration. `UNKNOWN` prevents invalid storage but does not guarantee ETA accuracy; review or refine unclassified segments with the road-type updater and validate its results against actual roads.
+Apply [migration 008](../../../backend/api/migrations/008_normalize_route_segment_road_types.sql) to backfill existing NULL, blank, lowercase, and unsupported values; set the database default to `UNKNOWN`; enforce `NOT NULL`; and constrain stored values to the canonical set. The Go repository also maps legacy SQL NULLs to `UNKNOWN` while deployments roll out the migration. `UNKNOWN` prevents invalid storage but does not guarantee ETA accuracy; review or refine unclassified segments with the road-type updater and validate its results against actual roads.
 
 ### Local admin access
 
-While the Electron kiosk app is running, press **Ctrl+Shift+A** to open the local admin login window. This is wired for both development and the packaged Angular display: the Angular root captures the shortcut and calls the limited `openAdmin()` API exposed by [preload.js](preload.js), which sends an IPC message to [main.js](main.js). Electron main then creates the local login window; the fallback page [index.html](index.html) also handles the chord when the Angular assets are unavailable.
+While the Electron kiosk app is running, press **Ctrl+Shift+A** to open the local admin login window. This is wired for both development and the packaged Angular display: the Angular root captures the shortcut and calls the limited `openAdmin()` API exposed by [preload.js](../../../kiosk/kiosk-electron-shell/preload.js), which sends an IPC message to [main.js](../../../kiosk/kiosk-electron-shell/main.js). Electron main then creates the local login window; the fallback page [index.html](../../../kiosk/kiosk-electron-shell/index.html) also handles the chord when the Angular assets are unavailable.
 
-After successful login, the local admin form in [admin.html](admin.html) can update the lounge identity, display mode/layout, language, sync frequency, resolution, and orientation for this kiosk. Maintenance personnel can use it directly on the thin client without opening the centralized Angular management pages.
+After successful login, the local admin form in [admin.html](../../../kiosk/kiosk-electron-shell/admin.html) can update the lounge identity, display mode/layout, language, sync frequency, resolution, and orientation for this kiosk. Maintenance personnel can use it directly on the thin client without opening the centralized Angular management pages.
 
 The preload bridge keeps renderer code from receiving Electron's unrestricted `ipcRenderer`, but that only describes the IPC boundary; it does not make the current login secure. The login check in `main.js` currently uses hard-coded `admin` / `password` credentials. Replace this with production-grade authentication and authorization before deployment, and do not treat the shortcut or login window as a substitute for Windows kiosk account restrictions.
 
 ## Target-device boot and provisioning flow
 
-Use this sequence on each industrial thin client. Prefer centrally managed provisioning (such as your organization's MDM/GPO process) for repeatable fleet deployment. The project includes [provision-shell-launcher.ps1](provision-shell-launcher.ps1); the separate registry hardening script above applies per-user Explorer/Task Manager policies.
+Use this sequence on each industrial thin client. Prefer centrally managed provisioning (such as your organization's MDM/GPO process) for repeatable fleet deployment. The project includes [provision-shell-launcher.ps1](../../../kiosk/kiosk-electron-shell/provision-shell-launcher.ps1); the separate registry hardening script above applies per-user Explorer/Task Manager policies.
 
 1. Confirm the target Windows edition supports Shell Launcher and determine the device CPU architecture. Build and test the app for that OS/architecture, then install the packaged application to a stable path. The current NSIS target does not configure a Shell Launcher assignment; point Windows to the installed product executable, not `node_modules\electron\electron.exe` or a development folder.
 2. Create a dedicated standard kiosk account and a separate administrator account. Confirm the administrator account can sign in and receives the normal Explorer shell before changing kiosk provisioning.

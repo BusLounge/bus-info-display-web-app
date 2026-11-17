@@ -72,7 +72,6 @@ interface LocalScheduleSnapshot {
       busCompanyName?: string;
       routeNumber?: string;
       destination?: string;
-      actualDeparture?: string;
       remarks?: string;
       status?: string;
     }>;
@@ -85,7 +84,6 @@ interface LocalScheduleSnapshot {
       busCompanyName?: string;
       routeNumber?: string;
       origin?: string;
-      actualArrival?: string;
       remarks?: string;
       status?: string;
     }>;
@@ -1258,7 +1256,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
     }));
 
     const arrivals = arrivalsRaw.map((arr) => {
-      const remarks = arr.actualArrival ? 'At Lounge' : arr.remarks || arr.status || '';
+      const remarks = arr.remarks || arr.status || '';
       return {
         time: this.toDisplayTime(arr.time),
         busNo: arr.busNo || 'TBA',
@@ -1266,7 +1264,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
         routeNo: arr.routeNumber || '-',
         origin: arr.origin || '-',
         remarks,
-        status: arr.actualArrival ? 'at-lounge' : this.getStatusClass(remarks),
+        status: this.getStatusClass(remarks),
         indicator: this.hasIndicator(remarks)
       };
     });
@@ -1922,12 +1920,6 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
 
   private getStatusClass(remarks: string): string {
     const lowerRemarks = (remarks || '').toLowerCase();
-    if (lowerRemarks.includes('at lounge')) {
-      return 'at-lounge';
-    }
-    if (lowerRemarks.includes('departed') || lowerRemarks.includes('arrived')) {
-      return lowerRemarks.includes('departed') ? 'departed' : 'arrived';
-    }
     if (lowerRemarks.includes('check in') || lowerRemarks.includes('boarding')) {
       return 'checkin';
     }
@@ -1951,9 +1943,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       lowerRemarks.includes('delay') ||
       lowerRemarks.includes('expected') ||
       lowerRemarks.includes('on time') ||
-      lowerRemarks.includes('arriving') ||
-      lowerRemarks.includes('arrived') ||
-      lowerRemarks.includes('at lounge')
+      lowerRemarks.includes('arriving')
     );
   }
 

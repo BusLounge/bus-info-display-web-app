@@ -81,9 +81,9 @@ export class ScheduleService {
             busCompanyName: arr.busCompanyName || '',
             routeNo: arr.routeNumber,
             origin: arr.origin,
-            remarks: arr.actualArrival ? 'At Lounge' : arr.remarks || arr.status || '',
-            status: arr.actualArrival ? 'at-lounge' : this.getStatusClass(arr.remarks || arr.status || ''),
-            indicator: !!arr.actualArrival || this.hasIndicator(arr.remarks || arr.status || '')
+            remarks: arr.remarks || arr.status || '',
+            status: this.getStatusClass(arr.remarks || arr.status || ''),
+            indicator: this.hasIndicator(arr.remarks || arr.status || '')
           }))
         };
       })
@@ -110,9 +110,6 @@ export class ScheduleService {
 
   private getStatusClass(remarks: string): string {
     const lowerRemarks = remarks.toLowerCase();
-    if (lowerRemarks.includes('departed') || lowerRemarks.includes('arrived')) {
-      return lowerRemarks.includes('departed') ? 'departed' : 'arrived';
-    }
     if (lowerRemarks.includes('check in') || lowerRemarks.includes('boarding')) {
       return 'checkin';
     }

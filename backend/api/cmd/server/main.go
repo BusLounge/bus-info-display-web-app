@@ -56,12 +56,19 @@ func main() {
 
 	// Arrival Management
 	arrivalRepo := database.NewArrivalRepository(db.DB)
-	arrivalService := services.NewArrivalService(arrivalRepo, tripGeneratorLocation, cfg.ETAProfiles)
+	// Lounge boards (kiosks): one ETA calculation feeds both arrivals and departures
+	loungeBoard := services.NewLoungeBoardService(
+		database.NewLoungeETARepository(db.DB),
+		tripGeneratorLocation,
+		cfg.ETAProfiles,
+		cfg.LoungeStopoverMinutes,
+	)
+	arrivalService := services.NewArrivalService(arrivalRepo, tripGeneratorLocation, loungeBoard, cfg.ETAProfiles)
 	arrivalHandler := handlers.NewArrivalHandler(arrivalService)
 
 	// Departure Management
 	departureRepo := database.NewDepartureRepository(db.DB)
-	departureService := services.NewDepartureService(departureRepo, tripGeneratorLocation)
+	departureService := services.NewDepartureService(departureRepo, tripGeneratorLocation, loungeBoard)
 	departureHandler := handlers.NewDepartureHandler(departureService)
 
 	// Lounge Management

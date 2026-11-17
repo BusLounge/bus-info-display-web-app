@@ -2,7 +2,7 @@
 
 The code is split by where it runs.
 
-To test-run everything on macOS or Windows, see [QUICKSTART.md](QUICKSTART.md).
+To test-run everything on macOS or Windows, see [docs/QUICKSTART.md](docs/QUICKSTART.md). All documentation is in [docs/](docs/README.md); the ETA logic is described in [docs/ETA_IMPLEMENTATION.md](docs/ETA_IMPLEMENTATION.md).
 
 ## `backend/` — runs on the server
 
@@ -20,7 +20,7 @@ cd backend
 docker compose up --build
 ```
 
-- API: http://localhost:8083 (reads secrets and the database URL from `api/.env`; create it from `api/.env.example`, see QUICKSTART.md)
+- API: http://localhost:8083 (reads secrets and the database URL from `api/.env`; create it from `api/.env.example`, see docs/QUICKSTART.md)
 - Admin app: http://localhost:4300 (nginx; proxies `/api` and `/media` to the API)
 - Uploaded media is kept in the `media` Docker volume.
 - The ETA engine is optional: `docker compose --profile eta up --build`. It needs the trained

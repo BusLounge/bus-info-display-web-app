@@ -11,6 +11,8 @@ services:
       PORT: "8083"
       MEDIA_DIR: /data/media
       ETA_ENGINE_URL: http://eta-engine:8000
+      # Set to "true" (and start the eta profile) once the engine has trained model files
+      ETA_ENGINE_ENABLED: "false"
     ports:
       - "8083:8083"   # kiosks and sync agents connect here
     volumes:
@@ -26,8 +28,8 @@ services:
     restart: unless-stopped
 
   # Optional: start with `docker compose --profile eta up --build`.
-  # It needs the trained model files in eta_engine/ to make predictions;
-  # without it the API uses its built-in ETA fallback.
+  # It needs the trained model files in eta_engine/ to make predictions, and
+  # ETA_ENGINE_ENABLED: "true" on the api service. Without it the API uses its own ETAs.
   eta-engine:
     profiles: ["eta"]
     build: ./eta_engine

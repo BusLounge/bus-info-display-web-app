@@ -106,42 +106,6 @@ func (h *ETAHandler) GetAccuracyReport(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// RecordActualArrival records when a bus actually arrives at a lounge
-// POST /api/v1/eta/arrival
-func (h *ETAHandler) RecordActualArrival(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		TripID            string    `json:"trip_id"`
-		LoungeID          string    `json:"lounge_id"`
-		ActualArrivalTime time.Time `json:"actual_arrival_time"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	tripID, err := uuid.Parse(req.TripID)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid trip ID")
-		return
-	}
-
-	loungeID, err := uuid.Parse(req.LoungeID)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid lounge ID")
-		return
-	}
-
-	if err := h.etaService.RecordActualArrival(r.Context(), tripID, loungeID, req.ActualArrivalTime); err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Failed to record arrival: "+err.Error())
-		return
-	}
-
-	respondWithJSON(w, http.StatusOK, map[string]string{
-		"message": "Actual arrival time recorded successfully",
-	})
-}
-
 // RecordSegmentPerformance records performance data for a completed segment
 // POST /api/v1/eta/segment-performance
 func (h *ETAHandler) RecordSegmentPerformance(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +205,6 @@ func (h *ETAHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/api/v1/eta/accuracy", h.GetAccuracyReport).Methods("GET")
 	
 	// Data collection
-	r.HandleFunc("/api/v1/eta/arrival", h.RecordActualArrival).Methods("POST")
 	r.HandleFunc("/api/v1/eta/segment-performance", h.RecordSegmentPerformance).Methods("POST")
 	r.HandleFunc("/api/v1/eta/trip-context", h.CreateTripContext).Methods("POST")
 	

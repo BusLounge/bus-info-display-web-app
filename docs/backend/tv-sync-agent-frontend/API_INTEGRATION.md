@@ -522,6 +522,6 @@ func getDevices(c *gin.Context) {
 7. ✅ Deploy and test in production
 
 For more help, see:
-- [README.md](./README.md)
-- [QUICK_START.md](./QUICK_START.md)
-- [FEATURES.md](./FEATURES.md)
+- [README.md](README.md)
+- [QUICK_START.md](QUICK_START.md)
+- [FEATURES.md](FEATURES.md)

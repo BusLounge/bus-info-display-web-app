@@ -1,19 +1,23 @@
 package services
 
 import (
+	"context"
+	"fmt"
+	"math"
+	"time"
+
 	"bus-schedule-lounge/internal/database"
 	"bus-schedule-lounge/internal/models"
-	"fmt"
-	"time"
 )
 
 type DepartureService struct {
 	repo     *database.DepartureRepository
+	board    *LoungeBoardService
 	location *time.Location
 }
 
-func NewDepartureService(repo *database.DepartureRepository, location *time.Location) *DepartureService {
-	return &DepartureService{repo: repo, location: location}
+func NewDepartureService(repo *database.DepartureRepository, location *time.Location, board *LoungeBoardService) *DepartureService {
+	return &DepartureService{repo: repo, board: board, location: location}
 }
 
 // GetAllLoungeDepartures gets departures for all lounges with calculated remarks
@@ -34,37 +38,59 @@ func (s *DepartureService) GetAllLoungeDepartures() ([]models.LoungeDepartureRes
 	return s.groupByLounge(departures, start.Format("2006-01-02"), s.location.String()), nil
 }
 
-// GetDeparturesByLoungeID gets departures for a specific lounge with calculated remarks
+// GetDeparturesByLoungeID returns the departures board for one lounge (used by the kiosks).
+// Each departure is the bus's estimated arrival at the lounge plus the stopover, so it is
+// always after the arrival shown on the arrivals board.
 func (s *DepartureService) GetDeparturesByLoungeID(loungeID string) (*models.LoungeDepartureResponse, error) {
-	start, end, err := currentServiceDayBounds(time.Now(), s.location)
-	if err != nil {
-		return nil, err
-	}
-	departures, err := s.repo.GetDeparturesByLoungeID(loungeID, start, end)
+	board, err := s.board.Board(context.Background(), loungeID)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(departures) == 0 {
-		return &models.LoungeDepartureResponse{
-			LoungeID:        loungeID,
-			LoungeName:      "",
-			ServiceDate:     start.Format("2006-01-02"),
-			ServiceTimeZone: s.location.String(),
-			Departures:      []models.DepartureInfo{},
-		}, nil
+	response := &models.LoungeDepartureResponse{
+		LoungeID:        loungeID,
+		LoungeName:      board.LoungeName,
+		ServiceDate:     board.ServiceDate,
+		ServiceTimeZone: board.ServiceTimeZone,
+		Departures:      []models.DepartureInfo{},
 	}
+	for _, entry := range board.Departures() {
+		response.Departures = append(response.Departures, departureInfoFromETA(entry, board, s.location))
+	}
+	return response, nil
+}
 
-	// Process departures and calculate remarks
-	s.processDepartures(departures)
-
-	return &models.LoungeDepartureResponse{
-		LoungeID:        departures[0].LoungeID,
-		LoungeName:      departures[0].LoungeName,
-		ServiceDate:     start.Format("2006-01-02"),
-		ServiceTimeZone: s.location.String(),
-		Departures:      departures,
-	}, nil
+func departureInfoFromETA(entry LoungeTripETA, board *LoungeBoard, location *time.Location) models.DepartureInfo {
+	trip := entry.Trip
+	scheduled := trip.DepartureTime
+	arrival := entry.ArrivalETA
+	departure := entry.DepartureETA
+	stopover := board.StopoverMinutes
+	offset := int(math.Round(entry.MinutesFromDeparture))
+	return models.DepartureInfo{
+		LoungeID:               trip.LoungeID,
+		LoungeName:             trip.LoungeName,
+		LoungeLat:              trip.LoungeLat,
+		LoungeLng:              trip.LoungeLng,
+		ActiveTripID:           trip.ActiveTripID,
+		BusNumber:              busNumberOrTBA(trip.BusNumber),
+		BusCompanyName:         trip.BusCompanyName,
+		RouteNumber:            trip.RouteNumber,
+		Origin:                 trip.Origin,
+		Destination:            trip.Destination,
+		CurrentLat:             trip.CurrentLat,
+		CurrentLng:             trip.CurrentLng,
+		ScheduledDepartureTime: &scheduled,
+		ArrivalETA:             &arrival,
+		DepartureETA:           &departure,
+		StopoverMinutes:        &stopover,
+		OffsetMinutes:          &offset,
+		Status:                 tripStatusOrNotStarted(trip.ActiveTripStatus),
+		Remarks:                departureRemark(departure, board.Now, location),
+		TimeDisplay:            clockTime(departure, location),
+		DepartureTime:          &scheduled,
+		ETASource:              entry.Source,
+	}
 }
 
 // processDepartures calculates remarks and time display for each departure
@@ -73,13 +99,6 @@ func (s *DepartureService) processDepartures(departures []models.DepartureInfo) 
 
 	for i := range departures {
 		departure := &departures[i]
-
-		// If already departed
-		if departure.ActualDeparture != nil {
-			departure.Remarks = "Departed"
-			departure.TimeDisplay = departure.ActualDeparture.Format("15:04")
-			continue
-		}
 
 		// Use calculated departure ETA if available
 		if departure.DepartureETA == nil {

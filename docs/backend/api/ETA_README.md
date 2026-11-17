@@ -1,5 +1,7 @@
 # ETA Engine - Complete Implementation
 
+> **Note.** This describes the ETA engine v3 tables and the `/api/v1/eta` endpoints. The kiosk boards don't use these; they use the calculation in [ETA_IMPLEMENTATION.md](../../ETA_IMPLEMENTATION.md). The `POST /api/v1/eta/arrival` endpoint described here has been removed.
+
 ## 📚 Table of Contents
 - [Overview](#overview)
 - [Architecture](#architecture)

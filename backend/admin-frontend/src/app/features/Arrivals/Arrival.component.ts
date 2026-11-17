@@ -84,7 +84,6 @@ export class ArrivalComponent implements OnInit, OnDestroy {
     if (!remarks) return '';
     
     const lowerRemarks = remarks.toLowerCase();
-    if (lowerRemarks.includes('arrived')) return 'arrived';
     if (lowerRemarks.includes('delayed')) return 'delayed';
     if (lowerRemarks.includes('expected') || lowerRemarks.includes('arriving')) return 'expected';
     

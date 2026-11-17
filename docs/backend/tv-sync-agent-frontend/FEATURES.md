@@ -357,4 +357,4 @@ Features in development:
 
 ---
 
-For more information, see the [README](./README.md) or [Quick Start Guide](./QUICK_START.md).
+For more information, see the [README](README.md) or [Quick Start Guide](QUICK_START.md).

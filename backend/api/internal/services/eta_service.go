@@ -209,18 +209,6 @@ func (s *ETAService) SaveETAPrediction(ctx context.Context, pred ETAPrediction) 
 // RECORD ACTUAL ARRIVAL
 // ============================================================================
 
-// RecordActualArrival updates the actual arrival time for accuracy tracking
-func (s *ETAService) RecordActualArrival(ctx context.Context, tripID, loungeID uuid.UUID, actualArrivalTime time.Time) error {
-	query := `SELECT record_actual_arrival($1, $2, $3)`
-
-	_, err := s.db.ExecContext(ctx, query, tripID, loungeID, actualArrivalTime)
-	if err != nil {
-		return fmt.Errorf("failed to record actual arrival: %w", err)
-	}
-
-	return nil
-}
-
 // ============================================================================
 // ACCURACY REPORTING
 // ============================================================================

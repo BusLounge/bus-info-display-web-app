@@ -68,7 +68,6 @@ export class DeparturesComponent implements OnInit {
     if (!remarks) return '';
     
     const lowerRemarks = remarks.toLowerCase();
-    if (lowerRemarks.includes('departed')) return 'departed';
     if (lowerRemarks.includes('check in') || lowerRemarks.includes('boarding')) return 'checkin';
     if (lowerRemarks.includes('delay')) return 'delay';
     if (lowerRemarks.includes('on time')) return 'ontime';

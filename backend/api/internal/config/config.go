@@ -21,10 +21,13 @@ type Config struct {
 	AdminUser             string
 	AdminPass             string
 	ETAProfiles           map[string]float64
+	// Minutes a bus stops at a lounge: departure = arrival + this.
+	LoungeStopoverMinutes int
 }
 
 type jsonConfig struct {
-	ETAProfiles map[string]float64 `json:"eta_profiles"`
+	ETAProfiles           map[string]float64 `json:"eta_profiles"`
+	LoungeStopoverMinutes int                `json:"lounge_stopover_minutes"`
 }
 
 func Load() *Config {
@@ -46,6 +49,7 @@ func Load() *Config {
 		AdminUser:             getRequiredEnv("SUPERADMIN_USERNAME"),
 		AdminPass:             getRequiredEnv("SUPERADMIN_PASSWORD"),
 		ETAProfiles:           fileConfig.ETAProfiles,
+		LoungeStopoverMinutes: fileConfig.LoungeStopoverMinutes,
 	}
 }
 

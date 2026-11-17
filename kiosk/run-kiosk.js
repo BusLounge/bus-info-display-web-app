@@ -12,7 +12,6 @@
  *   - tv-sync-agent-go/local-store/  (schedule, ads and media downloaded by the agent)
  *   - local-store/                   (media the agent mirrors here)
  *   - kiosk-electron-shell/bin/agent.exe (moved aside so Electron runs the agent from source)
- *   - kiosk-electron-shell/www/      (only when rebuildDisplay is true)
  * Files are restored to how they were when the script started, not to git.
  */
 'use strict';
@@ -201,7 +200,7 @@ async function stopChild(child) {
 async function warnAboutBusyPorts() {
   for (const port of [DISPLAY_PORT, BRIDGE_PORT]) {
     if (await anyoneListening(port)) {
-      log(`WARNING: something is still using port ${port}. Stop it before the next run (see QUICKSTART.md, Troubleshooting).`);
+      log(`WARNING: something is still using port ${port}. Stop it before the next run (see docs/QUICKSTART.md, Troubleshooting).`);
     }
   }
 }
@@ -268,13 +267,12 @@ async function waitForPort(port, timeoutMs) {
 // ---------------------------------------------------------------- backup / restore
 
 function backupPaths(config) {
-  const paths = [
+  // www/ is build output (not in the repository), so a rebuild is kept after the run.
+  return [
     AGENT_CONFIG,
     path.join(AGENT_DIR, 'local-store'),
     path.join(KIOSK_DIR, 'local-store'),
   ];
-  if (config.mode === 'electron' && config.rebuildDisplay) paths.push(WWW_DIR);
-  return paths;
 }
 
 function copyPath(from, to) {
@@ -444,7 +442,7 @@ async function main() {
 
   for (const port of [DISPLAY_PORT, BRIDGE_PORT]) {
     if (!(await portIsFree(port))) {
-      fail(`Port ${port} is already in use. Stop whatever is using it (see QUICKSTART.md, Troubleshooting) and try again.`);
+      fail(`Port ${port} is already in use. Stop whatever is using it (see docs/QUICKSTART.md, Troubleshooting) and try again.`);
     }
   }
 
