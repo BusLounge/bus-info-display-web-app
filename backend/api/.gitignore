@@ -1,0 +1,7 @@
+# Keeps secrets and build output out of git and out of `railway up` uploads
+# when this folder is uploaded on its own.
+.env
+.env.*
+!.env.example
+bin/
+*.exe

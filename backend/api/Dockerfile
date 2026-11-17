@@ -22,7 +22,8 @@ COPY internal/config/config.json ./internal/config/config.json
 USER app
 ENV PORT=8083 MEDIA_DIR=/data/media
 EXPOSE 8083
-VOLUME ["/data/media"]
+# Uploaded media lives in /data/media: Docker Compose mounts a named volume there,
+# Railway attaches its own volume (Railway does not allow the VOLUME instruction).
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s \
   CMD wget -qO- http://127.0.0.1:${PORT}/health || exit 1
 CMD ["./server"]

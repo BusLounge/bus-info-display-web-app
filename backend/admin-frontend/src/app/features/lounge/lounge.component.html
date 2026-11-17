@@ -2,85 +2,326 @@
   <app-header></app-header>
 
   <main class="lounge-content">
-    <section class="page-intro">
-      <h1>Lounge Route Segment Validation</h1>
-      <p>Validate each lounge route segment and show invalid stop mappings immediately.</p>
-
-      <div class="intro-actions">
-        <button class="btn-primary" (click)="validateAllLounges()" [disabled]="isLoadingLounges || isValidatingAll || !lounges.length">
-          {{ isValidatingAll ? 'Validating all lounges...' : 'Validate All Lounges' }}
-        </button>
-        <button class="btn-secondary" (click)="loadLounges()" [disabled]="isLoadingLounges">
-          {{ isLoadingLounges ? 'Refreshing lounges...' : 'Refresh Lounges' }}
-        </button>
-      </div>
-
-      <div class="summary" *ngIf="getValidatedLoungeCount() > 0">
-        <span>Validated lounges: {{ getValidatedLoungeCount() }}</span>
-        <span>Lounges with invalid segments: {{ getInvalidLoungeCount() }}</span>
-      </div>
-    </section>
-
-    <section *ngIf="error" class="error-box">
-      <p>{{ error }}</p>
-    </section>
-
-    <section *ngIf="isLoadingLounges" class="loading-box">
-      <p>Loading lounge list...</p>
-    </section>
-
-    <section *ngIf="!isLoadingLounges && !error" class="lounge-list">
-      <article class="lounge-card" *ngFor="let lounge of lounges">
-        <header class="lounge-card__header">
-          <div>
-            <h2>{{ lounge.loungeName }}</h2>
-            <p class="lounge-card__meta">ID: {{ lounge.id }}</p>
-          </div>
-
-          <div class="lounge-card__actions">
-            <button class="btn-primary" (click)="validateLounge(lounge.id)" [disabled]="isValidating(lounge.id)">
-              {{ isValidating(lounge.id) ? 'Validating...' : 'Validate' }}
+    <!-- Overview and filters, side by side -->
+    <div class="top-panels">
+      <section class="panel overview" aria-label="Lounge overview">
+        <div class="panel__head">
+          <h1>Lounges</h1>
+          <div class="panel__actions">
+            <button type="button" class="btn btn-small btn-ghost" (click)="loadLounges()" [disabled]="isLoadingLounges || isValidatingBulk">
+              {{ isLoadingLounges ? 'Refreshing…' : 'Refresh' }}
+            </button>
+            <button type="button" class="btn btn-small btn-primary" (click)="validateAllLounges()"
+              [disabled]="isLoadingLounges || isValidatingBulk || !lounges.length">
+              Validate all
             </button>
           </div>
-        </header>
+        </div>
 
-        <ng-container *ngIf="getValidationResult(lounge.id) as result">
-          <div class="status-row">
-            <span class="status-pill" [class.status-pill--valid]="result.isValid" [class.status-pill--invalid]="!result.isValid">
-              {{ result.isValid ? 'Valid' : 'Invalid' }}
-            </span>
-            <span class="status-detail">Segments checked: {{ result.segments.length }}</span>
-            <span class="status-detail" *ngIf="!result.isValid">Invalid segments: {{ getInvalidSegments(lounge.id).length }}</span>
+        <div class="stats">
+          <div class="stat">
+            <span class="stat__value">{{ lounges.length }}</span>
+            <span class="stat__label">Lounges</span>
+          </div>
+          <div class="stat">
+            <span class="stat__value">{{ operationalCount }}</span>
+            <span class="stat__label">Operational</span>
+          </div>
+          <div class="stat">
+            <span class="stat__value">{{ rejectedCount }}</span>
+            <span class="stat__label">Rejected</span>
+          </div>
+          <div class="stat">
+            <span class="stat__value">{{ getValidatedLoungeCount() }}</span>
+            <span class="stat__label">Validated</span>
+          </div>
+          <div class="stat" [class.stat--alert]="getInvalidLoungeCount() > 0">
+            <span class="stat__value">{{ getInvalidLoungeCount() }}</span>
+            <span class="stat__label">Invalid segments</span>
+          </div>
+        </div>
+
+        <div class="progress" *ngIf="isValidatingBulk" role="status" aria-live="polite">
+          <div class="progress__text">
+            Validating… {{ bulkDone }} / {{ bulkTotal }}
+            <button type="button" class="link-button" (click)="cancelBulkValidation()">Stop</button>
+          </div>
+          <div class="progress__track">
+            <div class="progress__bar" [style.width.%]="bulkProgressPercent"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel filters-panel" aria-label="Search and filters">
+        <div class="search">
+          <svg class="search__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10.5 3a7.5 7.5 0 0 1 5.93 12.1l4.24 4.23-1.42 1.42-4.23-4.24A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" />
+          </svg>
+          <input
+            type="search"
+            class="search__input"
+            placeholder="Search name, address, district, phone, amenity or ID"
+            aria-label="Search lounges"
+            [(ngModel)]="searchTerm"
+            (ngModelChange)="applyFilters()" />
+          <button type="button" class="search__clear" *ngIf="searchTerm" (click)="searchTerm = ''; applyFilters()" aria-label="Clear search">×</button>
+        </div>
+
+        <div class="filters">
+          <label class="filter">
+            <span>Status</span>
+            <select [(ngModel)]="statusFilter" (ngModelChange)="applyFilters()">
+              <option value="all">All</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </label>
+          <label class="filter">
+            <span>Open</span>
+            <select [(ngModel)]="operationalFilter" (ngModelChange)="applyFilters()">
+              <option value="all">All</option>
+              <option value="operational">Operational</option>
+              <option value="closed">Not operational</option>
+            </select>
+          </label>
+          <label class="filter">
+            <span>Segments</span>
+            <select [(ngModel)]="validationFilter" (ngModelChange)="applyFilters()">
+              <option value="all">All</option>
+              <option value="valid">Valid</option>
+              <option value="invalid">Invalid</option>
+              <option value="unchecked">Not checked</option>
+            </select>
+          </label>
+          <label class="filter">
+            <span>Sort</span>
+            <select [(ngModel)]="sortBy" (ngModelChange)="applyFilters()">
+              <option value="name">Name (A–Z)</option>
+              <option value="rating">Rating</option>
+              <option value="capacity">Capacity</option>
+              <option value="updated">Recently updated</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filters-panel__meta" *ngIf="!isLoadingLounges && !error">
+          <span>{{ filteredLounges.length }} of {{ lounges.length }} lounges</span>
+          <span class="filters-panel__links" *ngIf="hasActiveFilters">
+            <button type="button" class="link-button" (click)="validateFiltered()"
+              [disabled]="isValidatingBulk || !filteredLounges.length">Validate these</button>
+            <button type="button" class="link-button" (click)="clearFilters()">Clear filters</button>
+          </span>
+        </div>
+      </section>
+    </div>
+
+    <section *ngIf="error" class="notice notice--error">
+      <p>{{ error }}</p>
+      <button type="button" class="btn btn-small btn-secondary" (click)="loadLounges()">Try again</button>
+    </section>
+
+    <!-- Loading placeholders -->
+    <section *ngIf="isLoadingLounges" class="lounge-list" aria-busy="true">
+      <div class="lounge-row lounge-row--skeleton" *ngFor="let i of [1, 2, 3, 4, 5, 6, 7, 8]">
+        <div class="skeleton skeleton--name"></div>
+        <div class="skeleton skeleton--id"></div>
+      </div>
+    </section>
+
+    <section *ngIf="!isLoadingLounges && !error && lounges.length && !filteredLounges.length" class="notice">
+      <p>No lounges match your search.</p>
+      <button type="button" class="btn btn-small btn-secondary" (click)="clearFilters()">Clear filters</button>
+    </section>
+
+    <!-- Lounge list -->
+    <section *ngIf="!isLoadingLounges && !error && filteredLounges.length" class="lounge-list">
+      <article
+        class="lounge-row"
+        #row
+        *ngFor="let lounge of visibleLounges; trackBy: trackByLoungeId"
+        [class.lounge-row--open]="isExpanded(lounge)">
+        <div class="lounge-row__head">
+          <button
+            type="button"
+            class="lounge-row__toggle"
+            (click)="toggleLounge(lounge, row)"
+            [attr.aria-expanded]="isExpanded(lounge)"
+            [attr.aria-controls]="'lounge-panel-' + lounge.id">
+            <svg class="lounge-row__chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+            <span class="lounge-row__name">{{ lounge.loungeName }}</span>
+          </button>
+          <button
+            type="button"
+            class="id-copy"
+            [class.id-copy--done]="copiedLoungeId === lounge.id"
+            (click)="copyLoungeId(lounge.id, $event)"
+            [attr.aria-label]="'Copy lounge ID ' + lounge.id"
+            title="Copy lounge ID">
+            <code>{{ lounge.id }}</code>
+            <span class="id-copy__action">{{ copiedLoungeId === lounge.id ? 'Copied' : 'Copy' }}</span>
+          </button>
+        </div>
+
+        <!-- Details, only when expanded -->
+        <div class="lounge-row__panel" *ngIf="isExpanded(lounge)" [id]="'lounge-panel-' + lounge.id">
+          <div class="panel-top">
+            <div class="gallery-block">
+              <div class="gallery" *ngIf="getImages(lounge) as images">
+                <ng-container *ngIf="images.length; else noImages">
+                  <img class="gallery__main" [src]="images[selectedImageIndex]" [alt]="lounge.loungeName"
+                    (error)="onImageError(images[selectedImageIndex], lounge)" />
+                  <ng-container *ngIf="images.length > 1">
+                    <button type="button" class="gallery__nav gallery__nav--prev" (click)="stepImage(lounge, -1)" aria-label="Previous photo">‹</button>
+                    <button type="button" class="gallery__nav gallery__nav--next" (click)="stepImage(lounge, 1)" aria-label="Next photo">›</button>
+                    <span class="gallery__count">{{ selectedImageIndex + 1 }} / {{ images.length }}</span>
+                  </ng-container>
+                </ng-container>
+                <ng-template #noImages>
+                  <div class="gallery__empty">
+                    <span>{{ initials(lounge.loungeName) }}</span>
+                    <small>No photos</small>
+                  </div>
+                </ng-template>
+              </div>
+              <div class="thumbs" *ngIf="getImages(lounge).length > 1">
+                <button type="button" class="thumb" *ngFor="let image of getImages(lounge); let i = index"
+                  [class.thumb--active]="i === selectedImageIndex" (click)="selectedImageIndex = i" [attr.aria-label]="'Photo ' + (i + 1)">
+                  <img [src]="image" alt="" loading="lazy" (error)="onImageError(image, lounge)" />
+                </button>
+              </div>
+            </div>
+
+            <div class="summary">
+              <div class="chips-row">
+                <span class="badge" [class.badge--green]="lounge.status === 'approved'" [class.badge--red]="lounge.status === 'rejected'">
+                  {{ (lounge.status || 'unknown') | titlecase }}
+                </span>
+                <span class="badge" [class.badge--green]="lounge.isOperational" [class.badge--grey]="!lounge.isOperational">
+                  {{ lounge.isOperational ? 'Operational' : 'Not operational' }}
+                </span>
+                <span class="badge badge--amber" *ngIf="hasRating(lounge)">★ {{ lounge.averageRating | number: '1.1-1' }}</span>
+                <span class="badge badge--grey" *ngIf="!hasRating(lounge)">No ratings yet</span>
+              </div>
+              <p class="summary__description">{{ lounge.description || 'No description.' }}</p>
+              <dl class="summary__facts">
+                <div><dt>Capacity</dt><dd>{{ lounge.capacity ? lounge.capacity + ' seats' : '—' }}</dd></div>
+                <div><dt>Staff</dt><dd>{{ lounge.totalStaff ?? '—' }}</dd></div>
+                <div><dt>1 hour</dt><dd>{{ formatPrice(lounge.price1Hour) }}</dd></div>
+                <div>
+                  <dt>Phone</dt>
+                  <dd>
+                    <a *ngIf="lounge.contactPhone" class="inline-link" [href]="'tel:' + lounge.contactPhone">{{ lounge.contactPhone }}</a>
+                    <span *ngIf="!lounge.contactPhone">—</span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
           </div>
 
-          <div class="invalid-table" *ngIf="getInvalidSegments(lounge.id).length > 0">
-            <table>
-              <thead>
-                <tr>
-                  <th>Route</th>
-                  <th>Stop Before</th>
-                  <th>Stop After</th>
-                  <th>Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let segment of getInvalidSegments(lounge.id)">
-                  <td>{{ segment.routeNumber || segment.masterRouteId }}</td>
-                  <td>
-                    {{ segment.stopBeforeName || segment.stopBeforeId }}
-                    <span *ngIf="segment.stopBeforeOrder !== undefined">(order {{ segment.stopBeforeOrder }})</span>
-                  </td>
-                  <td>
-                    {{ segment.stopAfterName || segment.stopAfterId }}
-                    <span *ngIf="segment.stopAfterOrder !== undefined">(order {{ segment.stopAfterOrder }})</span>
-                  </td>
-                  <td>{{ segment.reason }}</td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="details-grid">
+            <section class="detail-card">
+              <h3>Location</h3>
+              <dl>
+                <dt>Address</dt><dd>{{ lounge.address || '—' }}</dd>
+                <dt>District</dt><dd>{{ lounge.district || lounge.city || '—' }}</dd>
+                <dt>Province</dt><dd>{{ lounge.state || '—' }}</dd>
+                <dt>Country</dt><dd>{{ lounge.country || '—' }}</dd>
+                <dt>Postal code</dt><dd>{{ lounge.postalCode || '—' }}</dd>
+                <dt>Coordinates</dt>
+                <dd>
+                  <ng-container *ngIf="hasCoordinates(lounge); else noCoords">
+                    {{ lounge.latitude | number: '1.4-6' }}, {{ lounge.longitude | number: '1.4-6' }}
+                    <a class="inline-link" [href]="mapsUrl(lounge)" target="_blank" rel="noopener">Open map</a>
+                  </ng-container>
+                  <ng-template #noCoords>Not set</ng-template>
+                </dd>
+              </dl>
+              <p class="warning" *ngIf="usesDefaultCoordinates(lounge)">
+                These are the default Colombo coordinates, not this lounge's real location.
+              </p>
+            </section>
+
+            <section class="detail-card">
+              <h3>Pricing</h3>
+              <table class="price-table" *ngIf="hasPricing(lounge); else noPricing">
+                <tbody>
+                  <tr><th>1 hour</th><td>{{ formatPrice(lounge.price1Hour) }}</td></tr>
+                  <tr><th>2 hours</th><td>{{ formatPrice(lounge.price2Hours) }}</td></tr>
+                  <tr><th>3 hours</th><td>{{ formatPrice(lounge.price3Hours) }}</td></tr>
+                  <tr><th>Until the bus</th><td>{{ formatPrice(lounge.priceUntilBus) }}</td></tr>
+                </tbody>
+              </table>
+              <ng-template #noPricing><p class="muted">No prices set.</p></ng-template>
+            </section>
+
+            <section class="detail-card">
+              <h3>Amenities</h3>
+              <div class="chips" *ngIf="getAmenities(lounge).length; else noAmenities">
+                <span class="chip" *ngFor="let amenity of getAmenities(lounge)">{{ amenityLabel(amenity) }}</span>
+              </div>
+              <ng-template #noAmenities><p class="muted">None listed.</p></ng-template>
+            </section>
+
+            <section class="detail-card detail-card--muted">
+              <h3>Record</h3>
+              <dl>
+                <dt>Owner ID</dt><dd class="mono">{{ lounge.loungeOwnerId || '—' }}</dd>
+                <dt>Verification</dt><dd>{{ lounge.verificationNote || '—' }}</dd>
+                <dt>Created</dt><dd>{{ lounge.createdAt ? (lounge.createdAt | date: 'medium') : '—' }}</dd>
+                <dt>Updated</dt><dd>{{ lounge.updatedAt ? (lounge.updatedAt | date: 'medium') : '—' }}</dd>
+              </dl>
+            </section>
           </div>
-        </ng-container>
+
+          <section class="detail-card detail-card--wide">
+            <div class="detail-card__title-row">
+              <h3>Route segments</h3>
+              <button type="button" class="btn btn-small btn-primary" (click)="validateLounge(lounge.id)" [disabled]="isValidating(lounge.id) || isValidatingBulk">
+                {{ isValidating(lounge.id) ? 'Checking…' : (getValidationResult(lounge.id) ? 'Check again' : 'Validate') }}
+              </button>
+            </div>
+
+            <ng-container *ngIf="getValidationResult(lounge.id) as result; else segmentsNotChecked">
+              <p class="segment-summary">
+                <span class="pill" [class.pill--valid]="result.isValid" [class.pill--invalid]="!result.isValid">
+                  {{ result.isValid ? 'All valid' : 'Problems found' }}
+                </span>
+                {{ result.segments.length }} route{{ result.segments.length === 1 ? '' : 's' }} checked<ng-container *ngIf="!result.isValid">, {{ getInvalidSegments(lounge.id).length }} invalid</ng-container>
+              </p>
+              <div class="table-wrap" *ngIf="result.segments.length">
+                <table class="segment-table">
+                  <thead>
+                    <tr><th>Route</th><th>Stop before</th><th>Stop after</th><th>Result</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let segment of result.segments" [class.row--invalid]="!segment.isValid">
+                      <td>{{ segment.routeNumber || segment.masterRouteId }}</td>
+                      <td>{{ segment.stopBeforeName || segment.stopBeforeId }}<small *ngIf="segment.stopBeforeOrder !== undefined"> #{{ segment.stopBeforeOrder }}</small></td>
+                      <td>{{ segment.stopAfterName || segment.stopAfterId }}<small *ngIf="segment.stopAfterOrder !== undefined"> #{{ segment.stopAfterOrder }}</small></td>
+                      <td>
+                        <span class="pill" [class.pill--valid]="segment.isValid" [class.pill--invalid]="!segment.isValid">
+                          {{ segment.isValid ? 'Valid' : segment.reason }}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="muted" *ngIf="!result.segments.length">This lounge isn't linked to any route.</p>
+            </ng-container>
+            <ng-template #segmentsNotChecked>
+              <p class="muted" *ngIf="!hasValidationError(lounge.id)">Not checked yet.</p>
+              <p class="warning" *ngIf="hasValidationError(lounge.id)">The check failed. Try again.</p>
+            </ng-template>
+          </section>
+        </div>
       </article>
     </section>
+
+    <div class="show-more" *ngIf="!isLoadingLounges && visibleLounges.length < filteredLounges.length">
+      <button type="button" class="btn btn-secondary" (click)="showMore()">
+        Show more ({{ filteredLounges.length - visibleLounges.length }} more)
+      </button>
+    </div>
   </main>
 </div>

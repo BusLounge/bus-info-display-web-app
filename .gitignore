@@ -48,3 +48,9 @@ Thumbs.db
 *.bak
 # Data exports saved at the repository root
 /*.csv
+
+# ---------------------------------------------------------------------------
+# Railway deployment files (kept locally for reference; not used to deploy this project)
+# ---------------------------------------------------------------------------
+.railwayignore
+docs/DEPLOY_RAILWAY.md

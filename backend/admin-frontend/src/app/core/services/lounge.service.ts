@@ -5,19 +5,32 @@ import { ApiService } from './api.service';
 export interface Lounge {
   id: string;
   loungeName: string;
+  loungeOwnerId?: string;
   description?: string;
   address?: string;
   city?: string;
   district?: string;
   state?: string;
   country?: string;
+  postalCode?: string;
+  latitude?: number;
+  longitude?: number;
   contactPhone?: string;
+  price1Hour?: number;
+  price2Hours?: number;
+  price3Hours?: number;
+  priceUntilBus?: number;
   capacity?: number;
-  amenities?: any;
-  images?: any[];
+  totalStaff?: number;
+  /** JSON array as text from the API, e.g. '["parking","ac"]' */
+  amenities?: string | string[] | null;
+  /** JSON array of image URLs as text from the API */
+  images?: string | string[] | null;
   status?: string;
   isOperational?: boolean;
   averageRating?: number;
+  verificationNote?: string;
+  marketplaceCategoryId?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -54,7 +67,14 @@ export class LoungeService {
     return this.api.get<Lounge>(`/lounges/${id}`);
   }
 
-  getLoungeRouteSegmentValidation(id: string, forceRefresh: boolean = true): Observable<LoungeRouteValidationResponse> {
-    return this.api.get<LoungeRouteValidationResponse>(`/lounges/${id}/route-segment-validation`, { forceRefresh });
+  getLoungeRouteSegmentValidation(
+    id: string,
+    forceRefresh: boolean = true,
+    suppressLoader: boolean = false
+  ): Observable<LoungeRouteValidationResponse> {
+    return this.api.get<LoungeRouteValidationResponse>(`/lounges/${id}/route-segment-validation`, {
+      forceRefresh,
+      suppressLoader
+    });
   }
 }
