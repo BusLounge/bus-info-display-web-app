@@ -10,6 +10,7 @@ import { TrafficLevelService } from '../../core/services/traffic-level.service';
 import { AdPlaybackLoggerService } from '../../core/services/ad-playback-logger.service';
 import { AdvertisementService } from '../../core/services/advertisement.service';
 import type { TVAdManifestItem } from '../../core/services/advertisement.service';
+import { MarqueeComponent } from './marquee.component';
 
 interface KioskAdvertisement {
   id: string;
@@ -44,20 +45,36 @@ type TrafficCycleConfig = {
 };
 type TranslationKey =
   | 'loadingLiveSchedule'
+  | 'busTimes'
+  | 'busDeparturesArrivals'
   | 'departures'
   | 'arrivals'
+  | 'leavingFromHere'
+  | 'comingIn'
+  | 'operator'
   | 'time'
-  | 'busNo'
-  | 'busCompany'
-  | 'companyTba'
-  | 'routeNumber'
-  | 'destination'
-  | 'origin'
-  | 'remarks'
+  | 'goingTo'
+  | 'comingFrom'
+  | 'bus'
+  | 'remark'
+  | 'private'
   | 'noDepartures'
   | 'noArrivals'
   | 'noTripsScheduledToday'
+  | 'nextBusLeaving'
+  | 'nextArrival'
+  | 'advertisement'
+  | 'noAdsAvailable'
+  | 'noAdsForSlot'
   | 'footerText';
+
+// Phrases with a value slot. `{n}` / `{place}` are substituted at render time so
+// each language can put the value where its grammar needs it.
+type TemplateKey = 'arrivalsIn' | 'departuresIn' | 'busTimesBackIn' | 'fromPlace';
+
+type DisplayView = 'full' | 'split' | 'ad' | 'adsOnly';
+type OperatorKind = 'sltb' | 'private' | 'unknown';
+type RemarkTone = 'go' | 'late' | 'cancelled' | 'muted' | 'normal';
 
 interface LocalScheduleSnapshot {
   loungeId: string;
@@ -150,6 +167,7 @@ interface LocalAgentStatus {
   layoutMode?: string;
   syncFrequencySeconds?: number;
   displayResolution?: string;
+  displayOrientation?: string;
   broadcastsEnabled?: boolean;
   lastBroadcastSync?: string;
 }
@@ -157,7 +175,7 @@ interface LocalAgentStatus {
 @Component({
   selector: 'app-bids-display',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, MarqueeComponent],
   templateUrl: './bids-display.component.html',
   styleUrls: ['./bids-display.component.scss']
 })
@@ -180,10 +198,52 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
   private readonly minimumAdDurationMs = 5000;
   private readonly loopAdDurationMs = 10000; // Duration for each ad in loop mode (10 seconds)
   private readonly schedulePageRotationMs = 10000;
-  readonly maxVisibleScheduleRows = 5;
-  
-  currentTime: string = '';
-  currentDate: string = '';
+  /** Height of one schedule row, in design pixels. */
+  private readonly scheduleRowDesignPx = 60;
+  /** "auto" or a "WIDTHxHEIGHT" canvas size from the kiosk settings. */
+  displayResolution = 'auto';
+  canvasWidth = 1920;
+  canvasHeight = 1080;
+  /** Size of one design pixel on the canvas (CSS --u). */
+  unitPx = 1;
+  canvasScale = 1;
+  private hasResolutionOverride = false;
+  private hasOrientationOverride = false;
+
+  /**
+   * How many rows fit in a schedule table on the current canvas. The constants
+   * are the design-pixel heights of everything around the rows (header, bars,
+   * footer, gaps) for each layout; 1920×1080 gives the original 12 rows.
+   */
+  get maxVisibleScheduleRows(): number {
+    const canvasDesignHeight = this.canvasHeight / (this.unitPx || 1);
+    const portrait = this.currentDisplayOrientation === 'portrait';
+    let bodyHeight: number;
+    if (this.activeView === 'split') {
+      // Portrait split gives the schedule the top 58% of the screen.
+      bodyHeight = (portrait ? canvasDesignHeight * 0.58 : canvasDesignHeight) - 338;
+    } else {
+      // Portrait full view stacks departures above arrivals.
+      bodyHeight = portrait ? (canvasDesignHeight - 488) / 2 : canvasDesignHeight - 360;
+    }
+    const rows = Math.floor(bodyHeight / this.scheduleRowDesignPx + 0.05);
+    return Math.min(30, Math.max(4, rows));
+  }
+
+  clockHourMinute: string = '';
+  clockSeconds: string = '';
+  dateLong: string = '';
+  dateShort: string = '';
+  showDebug: boolean = false;
+  /** Which table the split view is currently showing. */
+  splitPanel: 'departures' | 'arrivals' = 'departures';
+  splitSwitchCountdownSec = 0;
+  splitPanelProgress = 0;
+  adViewCountdownSec = 0;
+  private schedulePageTickAt = Date.now() - (Date.now() % 1000);
+  /** Ticks land this many ms after each second so a slightly late timer still reads the right second. */
+  private readonly clockTickOffsetMs = 30;
+  private clockStopped = false;
   loungeId: string = '';
   loungeName: string = '';
   departures: any[] = [];
@@ -210,7 +270,6 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
   debugNextSlotCountdown: string = 'N/A';
   private timeInterval: any;
   private scheduleInterval: any;
-  private schedulePageInterval: any;
   private adInterval: any;
   private adCheckInterval: any;
   private languageInterval: any;
@@ -253,57 +312,106 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
 
   private readonly translations: Record<DisplayLanguage, Record<TranslationKey, string>> = {
     en: {
-      loadingLiveSchedule: 'LOADING LIVE SCHEDULE...',
-      departures: 'DEPARTURES',
-      arrivals: 'ARRIVALS',
-      time: 'TIME',
-      busNo: 'BUS NO',
-      busCompany: 'COMPANY',
-      companyTba: 'Company TBA',
-      routeNumber: 'ROUTE NUMBER',
-      destination: 'DESTINATION',
-      origin: 'ORIGIN',
-      remarks: 'REMARKS',
+      loadingLiveSchedule: 'Loading live schedule…',
+      busTimes: 'Bus times',
+      busDeparturesArrivals: 'Bus departures & arrivals',
+      departures: 'Departures',
+      arrivals: 'Arrivals',
+      leavingFromHere: 'Leaving from here',
+      comingIn: 'Coming in',
+      operator: 'Operator',
+      time: 'Time',
+      goingTo: 'Going to',
+      comingFrom: 'Coming from',
+      bus: 'Bus',
+      remark: 'Remark',
+      private: 'Private',
       noDepartures: 'No departures available.',
       noArrivals: 'No arrivals available.',
       noTripsScheduledToday: 'No trips scheduled for today.',
+      nextBusLeaving: 'Next bus leaving',
+      nextArrival: 'Next arrival',
+      advertisement: 'Advertisement',
+      noAdsAvailable: 'No advertisements available',
+      noAdsForSlot: 'No advertisements available for this ad slot.',
       footerText: 'MAKE HAPPY JOURNEYS'
     },
     si: {
       loadingLiveSchedule: 'සජීවී කාලසටහන පූරණය වෙමින්...',
+      busTimes: 'බස් වේලාවන්',
+      busDeparturesArrivals: 'බස් පිටත්වීම් සහ පැමිණීම්',
       departures: 'පිටත්වීම්',
       arrivals: 'පැමිණීම්',
+      leavingFromHere: 'මෙතැනින් පිටත් වේ',
+      comingIn: 'පැමිණෙමින්',
+      operator: 'ක්‍රියාකරු',
       time: 'වේලාව',
-      busNo: 'බස් අංකය',
-      busCompany: 'සමාගම',
-      companyTba: 'සමාගම සඳහන් නැත',
-      routeNumber: 'මාර්ග අංකය',
-      destination: 'ගමනාන්තය',
-      origin: 'ආරම්භය',
-      remarks: 'සටහන්',
+      goingTo: 'ගමනාන්තය',
+      comingFrom: 'පැමිණෙන ස්ථානය',
+      bus: 'බස්',
+      remark: 'සටහන',
+      private: 'පුද්ගලික',
       noDepartures: 'පිටත්වීම් නොමැත.',
       noArrivals: 'පැමිණීම් නොමැත.',
       noTripsScheduledToday: 'අද දිනට ගමන් වාර සැලසුම් කර නොමැත.',
+      nextBusLeaving: 'ඊළඟ පිටත්වීම',
+      nextArrival: 'ඊළඟ පැමිණීම',
+      advertisement: 'දැන්වීම',
+      noAdsAvailable: 'දැන්වීම් නොමැත',
+      noAdsForSlot: 'මෙම කාල සීමාවට දැන්වීම් නොමැත.',
       footerText: 'සුභ ගමන්!'
     },
     ta: {
       loadingLiveSchedule: 'நேரடி அட்டவணை ஏற்றப்படுகிறது...',
+      busTimes: 'பஸ் நேரங்கள்',
+      busDeparturesArrivals: 'பஸ் புறப்பாடுகள் மற்றும் வருகைகள்',
       departures: 'புறப்பாடுகள்',
       arrivals: 'வருகைகள்',
+      leavingFromHere: 'இங்கிருந்து புறப்படும்',
+      comingIn: 'வருகின்றன',
+      operator: 'இயக்குநர்',
       time: 'நேரம்',
-      busNo: 'பஸ் எண்',
-      busCompany: 'நிறுவனம்',
-      companyTba: 'நிறுவனம் குறிப்பிடப்படவில்லை',
-      routeNumber: 'வழித்தட எண்',
-      destination: 'இலக்கு',
-      origin: 'தொடக்கம்',
-      remarks: 'குறிப்புகள்',
+      goingTo: 'செல்லும் இடம்',
+      comingFrom: 'வரும் இடம்',
+      bus: 'பஸ்',
+      remark: 'குறிப்பு',
+      private: 'தனியார்',
       noDepartures: 'புறப்பாடுகள் இல்லை.',
       noArrivals: 'வருகைகள் இல்லை.',
       noTripsScheduledToday: 'இன்றைக்கு பயணங்கள் திட்டமிடப்படவில்லை.',
+      nextBusLeaving: 'அடுத்த புறப்பாடு',
+      nextArrival: 'அடுத்த வருகை',
+      advertisement: 'விளம்பரம்',
+      noAdsAvailable: 'விளம்பரங்கள் இல்லை',
+      noAdsForSlot: 'இந்த நேரத்திற்கு விளம்பரங்கள் இல்லை.',
       footerText: 'மகிழ்ச்சியான பயணம்!'
     }
   };
+
+  private readonly templateTranslations: Record<DisplayLanguage, Record<TemplateKey, string>> = {
+    en: {
+      arrivalsIn: 'Arrivals in {n} s',
+      departuresIn: 'Departures in {n} s',
+      busTimesBackIn: 'Bus times back in {n} s',
+      fromPlace: 'from {place}'
+    },
+    si: {
+      arrivalsIn: 'පැමිණීම් තත්පර {n} කින්',
+      departuresIn: 'පිටත්වීම් තත්පර {n} කින්',
+      busTimesBackIn: 'බස් වේලාවන් තත්පර {n} කින්',
+      fromPlace: '{place} සිට'
+    },
+    ta: {
+      arrivalsIn: 'வருகைகள் {n} வினாடிகளில்',
+      departuresIn: 'புறப்பாடுகள் {n} வினாடிகளில்',
+      busTimesBackIn: 'பஸ் நேரங்கள் {n} வினாடிகளில்',
+      fromPlace: '{place} இலிருந்து'
+    }
+  };
+
+  // The API only exposes a free-text company name, so SLTB vs private is
+  // inferred from it. Anything not matching SLTB/CTB is treated as private.
+  private readonly sltbOperatorPattern = /\b(sltb|ctb)\b|transport\s*board/i;
 
   get currentAdvertisement(): KioskAdvertisement | KioskLoungeAd | null {
     return this.currentlyPlayingAd;
@@ -336,9 +444,48 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       (this.isAlternateAdPhase || this.isAdPlaying);
   }
 
+  /**
+   * Which of the kiosk views to render:
+   *  - full:    departures + arrivals side by side (schedules mode, alternate
+   *             schedule phase, or split mode with no ads to show)
+   *  - split:   one rotating schedule table + ad panel
+   *  - ad:      alternate-mode ad phase with the next-bus strip on top
+   *  - adsOnly: full-bleed ads
+   */
+  get activeView(): DisplayView {
+    if (this.currentDisplayMode === 'ads') {
+      return 'adsOnly';
+    }
+    if (this.isHybridAlternateAdDisplay) {
+      return 'ad';
+    }
+    if (
+      this.currentDisplayMode === 'both' &&
+      this.currentLayoutMode === 'split' &&
+      this.hasActiveAdvertisements
+    ) {
+      return 'split';
+    }
+    return 'full';
+  }
+
+  get adViewAd(): KioskAdvertisement | KioskLoungeAd | null {
+    return this.currentAlternateAd || this.currentlyPlayingAd;
+  }
+
+  get nextDeparture(): any | null {
+    return this.departures[0] || null;
+  }
+
+  get nextArrival(): any | null {
+    return this.arrivals[0] || null;
+  }
+
   ngOnInit() {
     this.updateInternetConnectionStatus();
+    this.updateCanvas();
     if (typeof window !== 'undefined') {
+      window.addEventListener('resize', this.handleViewportResize);
       window.addEventListener('online', this.handleOnlineStatusChange);
       window.addEventListener('offline', this.handleOnlineStatusChange);
       this.networkStatusCheckInterval = window.setInterval(() => this.updateInternetConnectionStatus(), 10000);
@@ -360,11 +507,20 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       }
       this.loungeId = nextLoungeId;
       this.loungeName = nextLoungeName;
-      
+      this.showDebug = (params['debug'] || '').toLowerCase() === 'true';
+
       // Apply settings from URL parameters
       this.applyDisplayMode(params['displayMode']);
       this.applyLayoutMode(params['layoutMode']);
-      this.applyDisplayOrientation(params['displayOrientation']);
+      // URL values win over the agent status (handy for testing a layout).
+      if (params['displayOrientation']) {
+        this.hasOrientationOverride = true;
+        this.applyDisplayOrientation(params['displayOrientation']);
+      }
+      if (params['displayResolution']) {
+        this.hasResolutionOverride = true;
+        this.applyDisplayResolution(params['displayResolution']);
+      }
       this.applyLanguage(params['language'] || params['lang'], true);
       this.applySyncFrequency(params['syncFrequencySeconds']);
 
@@ -391,32 +547,143 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
     });
 
     this.updateTime();
-    this.timeInterval = setInterval(() => this.updateTime(), 1000);
+    this.scheduleClockTick();
+  }
+
+  /**
+   * Fires just after each wall-clock second instead of every 1000 ms.
+   * setInterval drifts a few ms per tick, so two ticks eventually land in the
+   * same second and the display skips one. Re-aligning every tick prevents that.
+   */
+  private scheduleClockTick(): void {
+    if (this.clockStopped) {
+      return;
+    }
+    const delayMs = 1000 - (Date.now() % 1000) + this.clockTickOffsetMs;
+    this.timeInterval = setTimeout(() => {
+      this.onClockTick();
+      this.scheduleClockTick();
+    }, delayMs);
+  }
+
+  private onClockTick(): void {
+    const nowMs = Date.now();
+    // Page rotation shares the clock tick so the on-screen countdowns
+    // ("Arrivals in 3 s") step down exactly once per displayed second.
+    if (nowMs - this.schedulePageTickAt >= this.schedulePageRotationMs - this.clockTickOffsetMs) {
+      this.advanceSchedulePages();
+    }
+    // Schedule ↔ ad switching in alternate mode, on the same second boundary.
+    this.evaluateAlternateModePhase();
+    this.updateTime();
+    // The app is zoneless (no zone.js), so timer callbacks never re-render on
+    // their own. Without this the clock only repainted when something else
+    // happened to trigger change detection, which looked like skipped seconds.
+    this.changeDetector.markForCheck();
   }
 
   t(key: TranslationKey): string {
     return this.translations[this.currentLanguage][key] || this.translations.en[key];
   }
 
+  /** Translate a phrase that contains a number, e.g. "Arrivals in {n} s". */
+  tf(key: TemplateKey, n: number): string {
+    const template = this.templateTranslations[this.currentLanguage][key] || this.templateTranslations.en[key];
+    return template.replace('{n}', String(n));
+  }
+
+  fromPlace(place: string): string {
+    const template = this.templateTranslations[this.currentLanguage].fromPlace || this.templateTranslations.en.fromPlace;
+    return template.replace('{place}', place || '-');
+  }
+
+  operatorKind(companyName: string | null | undefined): OperatorKind {
+    const name = (companyName || '').trim();
+    if (!name) {
+      return 'unknown';
+    }
+    return this.sltbOperatorPattern.test(name) ? 'sltb' : 'private';
+  }
+
+  operatorLabel(companyName: string | null | undefined): string {
+    switch (this.operatorKind(companyName)) {
+      case 'sltb':
+        return 'SLTB';
+      case 'private':
+        return this.t('private');
+      default:
+        return '—';
+    }
+  }
+
+  /**
+   * Colour bucket for a remark, based on the strings the API produces
+   * ("Boarding Now", "Final Call - 8 min", "Delayed 12 min", "Arriving Now",
+   * "Expected at 14:00", "Scheduled", …).
+   */
+  remarkTone(remarks: string | null | undefined): RemarkTone {
+    const value = (remarks || '').trim().toLowerCase();
+    if (!value || value.includes('scheduled')) {
+      return 'muted';
+    }
+    if (value.includes('cancel')) {
+      return 'cancelled';
+    }
+    if (value.includes('delay')) {
+      return 'late';
+    }
+    if (
+      value.includes('boarding now') ||
+      value.includes('departing now') ||
+      value.includes('final call') ||
+      value.includes('arriving') ||
+      value.includes('check in') ||
+      value === 'boarding'
+    ) {
+      return 'go';
+    }
+    return 'normal';
+  }
+
+  emptyMessage(kind: 'departures' | 'arrivals'): string {
+    const items = kind === 'departures' ? this.departures : this.arrivals;
+    if (items.length) {
+      return '';
+    }
+    if (this.loading) {
+      return this.t('loadingLiveSchedule');
+    }
+    if (this.noTripsScheduledToday) {
+      return this.t('noTripsScheduledToday');
+    }
+    return kind === 'departures' ? this.t('noDepartures') : this.t('noArrivals');
+  }
+
+  trackScheduleRow = (index: number, row: any): string => {
+    if (!row) {
+      return `empty-${index}`;
+    }
+    return `${index}|${row.time}|${row.routeNo}|${row.busNo}|${row.destination ?? row.origin}`;
+  };
+
   ngOnDestroy() {
     if (typeof window !== 'undefined') {
+      window.removeEventListener('resize', this.handleViewportResize);
       window.removeEventListener('online', this.handleOnlineStatusChange);
       window.removeEventListener('offline', this.handleOnlineStatusChange);
     }
     if (this.networkStatusCheckInterval) {
       clearInterval(this.networkStatusCheckInterval);
     }
+    this.clockStopped = true;
     if (this.timeInterval) {
-      clearInterval(this.timeInterval);
+      clearTimeout(this.timeInterval);
     }
     if (this.scheduleInterval) {
       clearInterval(this.scheduleInterval);
     }
     if (this.adInterval) {
       clearInterval(this.adInterval);
-    }
-    if (this.schedulePageInterval) {
-      clearInterval(this.schedulePageInterval);
     }
     if (this.adCheckInterval) {
       clearInterval(this.adCheckInterval);
@@ -464,11 +731,21 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
     this.scheduleInterval = setInterval(() => this.fetchSchedule(true), this.scheduleRefreshMs);
   }
 
+  /** Restart the page-rotation timer; pages advance from onClockTick(). */
   private startSchedulePageRotation() {
-    if (this.schedulePageInterval) {
-      clearInterval(this.schedulePageInterval);
-    }
-    this.schedulePageInterval = setInterval(() => {
+    this.schedulePageTickAt = this.currentSecondStartMs();
+  }
+
+  private currentSecondStartMs(): number {
+    const nowMs = Date.now();
+    return nowMs - (nowMs % 1000);
+  }
+
+  private advanceSchedulePages(): void {
+    this.schedulePageTickAt = this.currentSecondStartMs();
+    if (this.activeView === 'split') {
+      this.advanceSplitSlide();
+    } else {
       const departurePages = Math.ceil(this.departures.length / this.maxVisibleScheduleRows);
       const arrivalPages = Math.ceil(this.arrivals.length / this.maxVisibleScheduleRows);
       if (departurePages > 1) {
@@ -477,8 +754,51 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
       if (arrivalPages > 1) {
         this.arrivalPageIndex = (this.arrivalPageIndex + 1) % arrivalPages;
       }
-      this.changeDetector.markForCheck();
-    }, this.schedulePageRotationMs);
+    }
+    this.updateViewCountdowns();
+    this.changeDetector.markForCheck();
+  }
+
+  /**
+   * Split view shows one table at a time: every page of departures, then
+   * every page of arrivals, one page per rotation tick.
+   */
+  private advanceSplitSlide(): void {
+    if (this.splitPanel === 'departures') {
+      if (this.departurePageIndex + 1 < this.getPageCount(this.departures)) {
+        this.departurePageIndex++;
+        return;
+      }
+      this.splitPanel = 'arrivals';
+      this.arrivalPageIndex = 0;
+      return;
+    }
+
+    if (this.arrivalPageIndex + 1 < this.getPageCount(this.arrivals)) {
+      this.arrivalPageIndex++;
+      return;
+    }
+    this.splitPanel = 'departures';
+    this.departurePageIndex = 0;
+  }
+
+  private getPageCount(items: unknown[]): number {
+    return Math.max(1, Math.ceil(items.length / this.maxVisibleScheduleRows));
+  }
+
+  private updateViewCountdowns(nowMs: number = Date.now()): void {
+    const items = this.splitPanel === 'departures' ? this.departures : this.arrivals;
+    const pageIndex = this.splitPanel === 'departures' ? this.departurePageIndex : this.arrivalPageIndex;
+    const pageCount = this.getPageCount(items);
+    const elapsedMs = Math.min(Math.max(0, nowMs - this.schedulePageTickAt), this.schedulePageRotationMs);
+    const pagesAfterCurrent = Math.max(0, pageCount - 1 - (pageIndex % pageCount));
+    const remainingPanelMs = pagesAfterCurrent * this.schedulePageRotationMs +
+      (this.schedulePageRotationMs - elapsedMs);
+    const totalPanelMs = pageCount * this.schedulePageRotationMs;
+
+    this.splitSwitchCountdownSec = Math.max(1, Math.ceil(remainingPanelMs / 1000));
+    this.splitPanelProgress = Math.min(100, Math.max(0, 100 * (1 - remainingPanelMs / totalPanelMs)));
+    this.adViewCountdownSec = Math.ceil(this.getRemainingCurrentAdPhaseMs(nowMs) / 1000);
   }
 
   get visibleDepartures(): any[] {
@@ -538,6 +858,7 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
     this.displayedServiceTimeZone = serviceTimeZone;
     this.departurePageIndex = this.normalizePageIndex(this.departurePageIndex, departures.length);
     this.arrivalPageIndex = this.normalizePageIndex(this.arrivalPageIndex, arrivals.length);
+    this.updateViewCountdowns();
     this.changeDetector.markForCheck();
   }
 
@@ -698,14 +1019,12 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
     }, this.loungeAdsRefreshMs);
   }
 
+  /** Phase changes are re-evaluated on every aligned clock tick (see onClockTick). */
   private startAlternateModeCycle() {
     if (this.alternateCycleInterval) {
       clearInterval(this.alternateCycleInterval);
+      this.alternateCycleInterval = undefined;
     }
-
-    this.alternateCycleInterval = setInterval(() => {
-      this.evaluateAlternateModePhase();
-    }, 1000);
 
     this.evaluateAlternateModePhase();
   }
@@ -1590,6 +1909,12 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
         if (status.layoutMode) {
           this.applyLayoutMode(status.layoutMode);
         }
+        if (status.displayOrientation && !this.hasOrientationOverride) {
+          this.applyDisplayOrientation(status.displayOrientation);
+        }
+        if (status.displayResolution && !this.hasResolutionOverride) {
+          this.applyDisplayResolution(status.displayResolution);
+        }
         if (status.syncFrequencySeconds) {
           this.applySyncFrequency(status.syncFrequencySeconds);
         }
@@ -1645,12 +1970,90 @@ export class BidsDisplayComponent implements OnInit, OnDestroy {
 
   private applyDisplayOrientation(value: string | undefined): void {
     const v = String(value || '').toLowerCase().trim();
-    if (v === 'portrait' || v === 'portrait-primary') {
-      this.currentDisplayOrientation = 'portrait';
-    } else {
-      this.currentDisplayOrientation = 'landscape';
+    const next = v === 'portrait' || v === 'portrait-primary' ? 'portrait' : 'landscape';
+    if (next !== this.currentDisplayOrientation) {
+      this.currentDisplayOrientation = next;
+      this.updateCanvas();
     }
   }
+
+  /** "auto" fills the screen; "WIDTHxHEIGHT" renders a fixed canvas (letterboxed to fit). */
+  private applyDisplayResolution(value: string | undefined): void {
+    const next = this.parseResolution(value) ? String(value).trim().toLowerCase() : 'auto';
+    if (next !== this.displayResolution) {
+      this.displayResolution = next;
+      this.updateCanvas();
+    }
+  }
+
+  private parseResolution(value: string | undefined): { width: number; height: number } | null {
+    const match = /^(\d{3,4})\s*x\s*(\d{3,4})$/i.exec(String(value || '').trim());
+    if (!match) {
+      return null;
+    }
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    if (width < 640 || height < 480 || width > 3840 || height > 3840) {
+      return null;
+    }
+    return { width, height };
+  }
+
+  /**
+   * Works out the canvas the display is drawn on and how it maps to the screen.
+   *
+   *  - Auto: the canvas is the screen. --u scales the 1920×1080 (or 1080×1920
+   *    portrait) design to fit, so taller screens simply get more rows.
+   *  - Fixed resolution: the canvas is that size (swapped for portrait). Design
+   *    pixels are drawn 1:1 (shrunk only if the canvas is narrower than the
+   *    design), so a bigger canvas fits more rows. The canvas is then scaled to
+   *    fit the screen, with black bars where the shapes differ.
+   */
+  private updateCanvas(): void {
+    const viewportWidth = (typeof window !== 'undefined' && window.innerWidth) || 1920;
+    const viewportHeight = (typeof window !== 'undefined' && window.innerHeight) || 1080;
+    const portrait = this.currentDisplayOrientation === 'portrait';
+    const designWidth = portrait ? 1080 : 1920;
+    const designHeight = portrait ? 1920 : 1080;
+    const preset = this.parseResolution(this.displayResolution);
+
+    let width: number;
+    let height: number;
+    let unit: number;
+    let scale: number;
+
+    if (!preset) {
+      width = viewportWidth;
+      height = viewportHeight;
+      unit = Math.min(width / designWidth, height / designHeight);
+      scale = 1;
+    } else {
+      // Presets are written landscape-first; turn them to match the orientation.
+      const long = Math.max(preset.width, preset.height);
+      const short = Math.min(preset.width, preset.height);
+      width = portrait ? short : long;
+      height = portrait ? long : short;
+      unit = Math.min(1, width / designWidth);
+      scale = Math.min(viewportWidth / width, viewportHeight / height);
+    }
+
+    this.canvasWidth = Math.round(width);
+    this.canvasHeight = Math.round(height);
+    this.unitPx = unit;
+    this.canvasScale = scale;
+    this.changeDetector.markForCheck();
+  }
+
+  /** Centres the canvas on screen and scales it to fit (black bars fill the rest). */
+  get canvasTransform(): string {
+    return `translate(-50%, -50%) scale(${this.canvasScale})`;
+  }
+
+  get unitCss(): string {
+    return `${this.unitPx}px`;
+  }
+
+  private readonly handleViewportResize = () => this.updateCanvas();
 
   private applySyncFrequency(raw: string | number | undefined): void {
     const seconds = this.normalizeSyncFrequency(raw);
@@ -2284,21 +2687,21 @@ private startAdvertisementPlayback(ad: KioskAdvertisement) {
     const now = new Date();
     const locale = this.getLocaleForLanguage();
     this.debugNowUtc = now.toISOString();
-    this.currentTime = now.toLocaleTimeString(locale, {
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-    this.currentDate = now.toLocaleDateString(locale, {
-      year: 'numeric',
+    this.clockHourMinute =
+      `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    this.clockSeconds = String(now.getSeconds()).padStart(2, '0');
+    // e.g. "Wednesday, 18 November 2026" / "Wed 18 Nov"
+    this.dateLong = now.toLocaleDateString(locale, {
+      weekday: 'long',
+      day: 'numeric',
       month: 'long',
-      day: '2-digit'
+      year: 'numeric'
     });
-    if (this.currentLanguage === 'en') {
-      this.currentDate = this.currentDate.toUpperCase();
-    }
+    this.dateShort = now
+      .toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' })
+      .replace(/,/g, '');
 
+    this.updateViewCountdowns(now.getTime());
     this.expirePreviousServiceDaySchedule();
     this.updateDebugState();
     this.evaluateBroadcastDisplay();

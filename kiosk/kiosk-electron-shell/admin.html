@@ -178,6 +178,13 @@
         .back-to-display:hover {
             color: #ffffff;
         }
+        .field-hint {
+            display: block;
+            margin-top: 6px;
+            font-size: 12px;
+            line-height: 1.35;
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body>
@@ -232,10 +239,32 @@
             </div>
             <div class="form-group">
                 <label for="displayResolution">Display Resolution</label>
+                <!-- The canvas the display is drawn on. It is scaled to fit the screen,
+                     with black bars if the shapes differ. Bigger = more rows, smaller text.
+                     Row counts are for the full schedule in landscape. -->
                 <select id="displayResolution" name="displayResolution">
-                    <option value="1280x720">HD / 720p - 1280 × 720</option>
-                    <option value="1920x1080" selected>Full HD / 1080p - 1920 × 1080</option>
+                    <option value="auto" selected>Auto - fill the screen (no bars)</option>
+                    <optgroup label="16:9 (most TVs)">
+                        <option value="1280x720">1280 × 720 - 12 rows, large text</option>
+                        <option value="1920x1080">1920 × 1080 - 12 rows</option>
+                        <option value="2560x1440">2560 × 1440 - 18 rows</option>
+                        <option value="3200x1800">3200 × 1800 - 24 rows</option>
+                        <option value="3840x2160">3840 × 2160 - 30 rows, small text</option>
+                    </optgroup>
+                    <optgroup label="16:10">
+                        <option value="1920x1200">1920 × 1200 - 14 rows</option>
+                        <option value="2560x1600">2560 × 1600 - 20 rows</option>
+                    </optgroup>
+                    <optgroup label="4:3 / 5:4 (older monitors)">
+                        <option value="1024x768">1024 × 768 - 18 rows</option>
+                        <option value="1280x1024">1280 × 1024 - 19 rows</option>
+                    </optgroup>
+                    <optgroup label="21:9 (ultra-wide)">
+                        <option value="2560x1080">2560 × 1080 - 12 rows</option>
+                        <option value="3440x1440">3440 × 1440 - 18 rows</option>
+                    </optgroup>
                 </select>
+                <small class="field-hint">Higher = more rows on screen (smaller text). Black bars appear if the screen is a different shape. Portrait flips the size.</small>
             </div>
             <div class="form-group">
                 <label for="displayOrientation">Display Orientation</label>
@@ -281,6 +310,28 @@
 
         // Initial check on page load
         toggleLayoutMode();
+
+        // Start from the saved settings so saving one change doesn't reset the others.
+        function setSelectValue(id, value) {
+            const select = document.getElementById(id);
+            if (!select || value === undefined || value === null || value === '') return;
+            const match = Array.from(select.options).find((option) => option.value === String(value));
+            if (match) select.value = match.value;
+        }
+        if (window.electronAPI && window.electronAPI.invoke) {
+            window.electronAPI.invoke('bridge:get', 'status').then((status) => {
+                if (!status) return;
+                setSelectValue('displayMode', status.displayMode);
+                setSelectValue('layoutMode', status.layoutMode);
+                setSelectValue('language', status.language);
+                setSelectValue('displayResolution', status.displayResolution);
+                setSelectValue('displayOrientation', status.displayOrientation);
+                if (status.syncFrequencySeconds) {
+                    document.getElementById('syncFrequencySeconds').value = status.syncFrequencySeconds;
+                }
+                toggleLayoutMode();
+            }).catch(() => { /* keep the defaults */ });
+        }
 
         document.getElementById('admin-form').addEventListener('submit', (e) => {
             e.preventDefault();

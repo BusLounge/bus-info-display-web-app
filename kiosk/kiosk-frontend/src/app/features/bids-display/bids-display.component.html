@@ -1,16 +1,14 @@
-<div class="bids-display" [class.connection-lost]="!isInternetConnected">
-  <div class="header" *ngIf="!isHybridAlternateAdDisplay">
-    <div class="header-brand">
-      <span class="brand-mark" aria-hidden="true"></span>
-      <div class="header-title">{{ loungeName.toUpperCase() }}</div>
-    </div>
-    <div class="header-time">
-      <div class="date">{{ currentDate }}</div>
-      <div class="time">{{ currentTime }}</div>
-    </div>
-  </div>
+<div class="bids-display"
+     [class.connection-lost]="!isInternetConnected"
+     [class.portrait]="currentDisplayOrientation === 'portrait'"
+     [attr.lang]="currentLanguage"
+     [attr.data-view]="activeView"
+     [style.width.px]="canvasWidth"
+     [style.height.px]="canvasHeight"
+     [style.--u]="unitCss"
+     [style.transform]="canvasTransform">
 
-  <div class="debug-line" *ngIf="!isHybridAlternateAdDisplay">
+  <div class="debug-line" *ngIf="showDebug && activeView !== 'ad'">
     <span>now(utc): {{ debugNowUtc }}</span>
     <span>next due ad id: {{ debugNextDueAdId }}</span>
     <span>nextPlayAt: {{ debugNextDueNextPlayAt }}</span>
@@ -19,358 +17,196 @@
     <span>countdown: {{ debugNextSlotCountdown }}</span>
   </div>
 
-  <div class="broadcast-banner" *ngIf="!isHybridAlternateAdDisplay && activeBroadcastMessage as broadcast">
-    <span class="broadcast-pill" [attr.data-priority]="broadcast.priority">Broadcast</span>
-    <span class="broadcast-text">{{ broadcast.message }}</span>
+  <!-- ===================== 4b · Full schedule ===================== -->
+  <div class="full-view" *ngIf="activeView === 'full'">
+    <header class="board-header">
+      <div class="brand">
+        <div class="eyebrow">{{ t('busDeparturesArrivals') }}</div>
+        <h1 class="lounge-name"><kiosk-marquee [text]="loungeName"></kiosk-marquee></h1>
+      </div>
+      <div class="header-clock inline">
+        <div class="header-date">{{ dateLong }}</div>
+        <div class="clock">{{ clockHourMinute }}<span class="clock-sec">:{{ clockSeconds }}</span></div>
+      </div>
+    </header>
+
+    <ng-container *ngTemplateOutlet="statusLines"></ng-container>
+
+    <div class="full-panels">
+      <ng-container *ngTemplateOutlet="boardPanel; context: { $implicit: 'departures', rows: departureDisplayRows, pageLabel: departurePageLabel, compact: false }"></ng-container>
+      <ng-container *ngTemplateOutlet="boardPanel; context: { $implicit: 'arrivals', rows: arrivalDisplayRows, pageLabel: arrivalPageLabel, compact: false }"></ng-container>
+    </div>
+
+    <footer class="board-footer centered">
+      <span class="footer-text">{{ t('footerText') }}</span>
+    </footer>
   </div>
 
-  <div class="content"
-       [class.split-layout]="currentDisplayMode === 'both' && currentLayoutMode === 'split'"
-       [class.alternate-layout]="currentDisplayMode === 'both' && currentLayoutMode === 'alternate'"
-      [class.hybrid-alternate-ad]="isHybridAlternateAdDisplay"
-       [class.schedules-only]="currentDisplayMode === 'schedules'"
-       [class.ads-only]="currentDisplayMode === 'ads'">
-
-    <!-- Split Screen Layout: Schedules + Ads side by side -->
-    <ng-container *ngIf="currentDisplayMode === 'both' && currentLayoutMode === 'split'">
-      <div class="split-container"
-           [class.vertical]="currentDisplayOrientation === 'portrait'"
-           [class.ad-free]="!hasActiveAdvertisements">
-        <!-- Left Side: Schedules -->
-        <div class="split-left glass-panel">
-          <div class="schedule-column">
-            <div *ngIf="loading" class="section-header">{{ t('loadingLiveSchedule') }}</div>
-            <div *ngIf="error" class="section-header">{{ error }}</div>
-
-            <!-- Departures Section -->
-            <div class="section departures-section">
-              <div class="section-header">{{ t('departures') }}</div>
-              <div class="table-wrapper">
-                <table class="schedule-table">
-                  <thead>
-                    <tr>
-                      <th>{{ t('time') }}</th>
-                      <th>{{ t('busNo') }} / {{ t('busCompany') }}</th>
-                      <th>{{ t('routeNumber') }}</th>
-                      <th>{{ t('destination') }}</th>
-                      <th>{{ t('remarks') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let dep of departureDisplayRows; let rowIndex = index" [class.has-indicator]="dep?.indicator">
-                      <ng-container *ngIf="dep; else emptySplitDeparture">
-                        <td>
-                          <span class="indicator" *ngIf="dep.indicator">●</span>
-                          {{ dep.time }}
-                        </td>
-                        <td class="bus-details">
-                          <span class="bus-number">{{ dep.busNo || 'TBA' }}</span>
-                          <span class="bus-company">{{ dep.busCompanyName || t('companyTba') }}</span>
-                        </td>
-                        <td>{{ dep.routeNo }}</td>
-                        <td>{{ dep.destination }}</td>
-                        <td>
-                          <span class="remark" [ngClass]="dep.status">{{ dep.remarks }}</span>
-                        </td>
-                      </ng-container>
-                      <ng-template #emptySplitDeparture>
-                        <td colspan="5">{{ rowIndex === 0 && !departures.length && !loading ? (noTripsScheduledToday ? t('noTripsScheduledToday') : t('noDepartures')) : '' }}</td>
-                      </ng-template>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="schedule-page-indicator" *ngIf="departurePageLabel" aria-live="polite">
-                {{ departurePageLabel }}
-              </div>
-            </div>
-
-            <!-- Arrivals Section -->
-            <div class="section arrivals-section">
-              <div class="section-header">{{ t('arrivals') }}</div>
-              <div class="table-wrapper">
-                <table class="schedule-table">
-                  <thead>
-                    <tr>
-                      <th>{{ t('time') }}</th>
-                      <th>{{ t('busNo') }} / {{ t('busCompany') }}</th>
-                      <th>{{ t('routeNumber') }}</th>
-                      <th>{{ t('origin') }}</th>
-                      <th>{{ t('remarks') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let arr of arrivalDisplayRows; let rowIndex = index" [class.has-indicator]="arr?.indicator">
-                      <ng-container *ngIf="arr; else emptySplitArrival">
-                        <td>
-                          <span class="indicator" *ngIf="arr.indicator">●</span>
-                          {{ arr.time }}
-                        </td>
-                        <td class="bus-details">
-                          <span class="bus-number">{{ arr.busNo || 'TBA' }}</span>
-                          <span class="bus-company">{{ arr.busCompanyName || t('companyTba') }}</span>
-                        </td>
-                        <td>{{ arr.routeNo }}</td>
-                        <td>{{ arr.origin }}</td>
-                        <td>
-                          <span class="remark" [ngClass]="arr.status">{{ arr.remarks }}</span>
-                        </td>
-                      </ng-container>
-                      <ng-template #emptySplitArrival>
-                        <td colspan="5">{{ rowIndex === 0 && !arrivals.length && !loading && !noTripsScheduledToday ? t('noArrivals') : '' }}</td>
-                      </ng-template>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="schedule-page-indicator" *ngIf="arrivalPageLabel" aria-live="polite">
-                {{ arrivalPageLabel }}
-              </div>
-            </div>
-          </div>
+  <!-- ===================== 4c · Split (schedule + ad) ===================== -->
+  <div class="split-view" *ngIf="activeView === 'split'">
+    <div class="split-board">
+      <header class="board-header compact">
+        <div class="brand">
+          <div class="eyebrow">{{ t('busTimes') }}</div>
+          <h1 class="lounge-name"><kiosk-marquee [text]="loungeName"></kiosk-marquee></h1>
         </div>
-
-        <!-- Right Side: Looping Ads -->
-        <div class="split-right glass-panel">
-          <div class="split-ad-container" *ngIf="currentSplitAd">
-            <img *ngIf="currentSplitAd.mediaType === 'image'" [src]="currentSplitAd.mediaUrl" [alt]="currentSplitAd.name" />
-            <video *ngIf="currentSplitAd.mediaType === 'video'" [src]="currentSplitAd.mediaUrl" autoplay muted loop playsinline (error)="onAdVideoError(currentSplitAd)"></video>
-            <div class="split-ad-caption">{{ currentSplitAd.name }}</div>
-          </div>
-          <div class="split-ad-placeholder" *ngIf="!currentSplitAd">
-            <p>No advertisements available</p>
-          </div>
+        <div class="header-clock">
+          <div class="header-date">{{ dateShort }}</div>
+          <div class="clock">{{ clockHourMinute }}<span class="clock-sec">:{{ clockSeconds }}</span></div>
         </div>
-      </div>
-    </ng-container>
+      </header>
 
-    <!-- Full Screen Alternate Mode: Schedules (ads play as overlay at scheduled times) -->
-    <ng-container *ngIf="currentDisplayMode === 'both' && currentLayoutMode === 'alternate'">
-      <div class="schedule-layout" *ngIf="!isAlternateAdPhase; else alternateAdPhase">
-        <div class="schedule-column">
-          <div *ngIf="loading" class="section-header">{{ t('loadingLiveSchedule') }}</div>
-          <div *ngIf="error" class="section-header">{{ error }}</div>
+      <ng-container *ngTemplateOutlet="statusLines"></ng-container>
 
-          <!-- Departures Section -->
-          <div class="section departures-section">
-            <div class="section-header">{{ t('departures') }}</div>
-            <div class="table-wrapper">
-              <table class="schedule-table">
-                <thead>
-                  <tr>
-                    <th>{{ t('time') }}</th>
-                    <th>{{ t('busNo') }} / {{ t('busCompany') }}</th>
-                    <th>{{ t('routeNumber') }}</th>
-                    <th>{{ t('destination') }}</th>
-                    <th>{{ t('remarks') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let dep of departureDisplayRows; let rowIndex = index" [class.has-indicator]="dep?.indicator">
-                    <ng-container *ngIf="dep; else emptyAlternateDeparture">
-                      <td>
-                        <span class="indicator" *ngIf="dep.indicator">●</span>
-                        {{ dep.time }}
-                      </td>
-                      <td class="bus-details">
-                        <span class="bus-number">{{ dep.busNo || 'TBA' }}</span>
-                        <span class="bus-company">{{ dep.busCompanyName || t('companyTba') }}</span>
-                      </td>
-                      <td>{{ dep.routeNo }}</td>
-                      <td>{{ dep.destination }}</td>
-                      <td>
-                        <span class="remark" [ngClass]="dep.status">{{ dep.remarks }}</span>
-                      </td>
-                    </ng-container>
-                    <ng-template #emptyAlternateDeparture>
-                      <td colspan="5">{{ rowIndex === 0 && !departures.length && !loading ? (noTripsScheduledToday ? t('noTripsScheduledToday') : t('noDepartures')) : '' }}</td>
-                    </ng-template>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="schedule-page-indicator" *ngIf="departurePageLabel" aria-live="polite">
-              {{ departurePageLabel }}
-            </div>
-          </div>
-
-          <!-- Arrivals Section -->
-          <div class="section arrivals-section">
-            <div class="section-header">{{ t('arrivals') }}</div>
-            <div class="table-wrapper">
-              <table class="schedule-table">
-                <thead>
-                  <tr>
-                    <th>{{ t('time') }}</th>
-                    <th>{{ t('busNo') }} / {{ t('busCompany') }}</th>
-                    <th>{{ t('routeNumber') }}</th>
-                    <th>{{ t('origin') }}</th>
-                    <th>{{ t('remarks') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let arr of arrivalDisplayRows; let rowIndex = index" [class.has-indicator]="arr?.indicator">
-                    <ng-container *ngIf="arr; else emptyAlternateArrival">
-                      <td>
-                        <span class="indicator" *ngIf="arr.indicator">●</span>
-                        {{ arr.time }}
-                      </td>
-                      <td class="bus-details">
-                        <span class="bus-number">{{ arr.busNo || 'TBA' }}</span>
-                        <span class="bus-company">{{ arr.busCompanyName || t('companyTba') }}</span>
-                      </td>
-                      <td>{{ arr.routeNo }}</td>
-                      <td>{{ arr.origin }}</td>
-                      <td>
-                        <span class="remark" [ngClass]="arr.status">{{ arr.remarks }}</span>
-                      </td>
-                    </ng-container>
-                    <ng-template #emptyAlternateArrival>
-                      <td colspan="5">{{ rowIndex === 0 && !arrivals.length && !loading && !noTripsScheduledToday ? t('noArrivals') : '' }}</td>
-                    </ng-template>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="schedule-page-indicator" *ngIf="arrivalPageLabel" aria-live="polite">
-              {{ arrivalPageLabel }}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <ng-template #alternateAdPhase>
-        <div class="ads-only-container" *ngIf="currentAlternateAd as altAd; else alternateAdEmpty">
-          <img *ngIf="altAd.mediaType === 'image'" [src]="altAd.mediaUrl" [alt]="altAd.name" />
-          <video *ngIf="altAd.mediaType === 'video'" [src]="altAd.mediaUrl" autoplay muted loop playsinline (error)="onAdVideoError($any(altAd))"></video>
-        </div>
-        <ng-template #alternateAdEmpty>
-          <div class="ads-only-placeholder">
-            <p>No advertisements available for this ad slot.</p>
-          </div>
+      <div class="split-panel-slot">
+        <ng-container *ngIf="splitPanel === 'departures'; else splitArrivals">
+          <ng-container *ngTemplateOutlet="boardPanel; context: { $implicit: 'departures', rows: departureDisplayRows, pageLabel: departurePageLabel, compact: true }"></ng-container>
+        </ng-container>
+        <ng-template #splitArrivals>
+          <ng-container *ngTemplateOutlet="boardPanel; context: { $implicit: 'arrivals', rows: arrivalDisplayRows, pageLabel: arrivalPageLabel, compact: true }"></ng-container>
         </ng-template>
+      </div>
+
+      <footer class="board-footer">
+        <span class="switch-countdown" aria-live="off">
+          {{ splitPanel === 'departures' ? tf('arrivalsIn', splitSwitchCountdownSec) : tf('departuresIn', splitSwitchCountdownSec) }}
+        </span>
+        <span class="footer-text">{{ t('footerText') }}</span>
+      </footer>
+    </div>
+
+    <aside class="split-ad">
+      <span class="ad-tag top">{{ t('advertisement') }}</span>
+      <ng-container *ngIf="currentSplitAd as ad; else splitAdEmpty">
+        <ng-container *ngTemplateOutlet="adMedia; context: { $implicit: ad }"></ng-container>
+      </ng-container>
+      <ng-template #splitAdEmpty>
+        <div class="ad-placeholder">{{ t('noAdsAvailable') }}</div>
       </ng-template>
-    </ng-container>
-
-    <!-- Schedules Only Mode -->
-    <ng-container *ngIf="currentDisplayMode === 'schedules'">
-      <div class="schedule-layout">
-        <div class="schedule-column">
-          <div *ngIf="loading" class="section-header">{{ t('loadingLiveSchedule') }}</div>
-          <div *ngIf="error" class="section-header">{{ error }}</div>
-
-          <!-- Departures Section -->
-          <div class="section departures-section">
-            <div class="section-header">{{ t('departures') }}</div>
-            <div class="table-wrapper">
-              <table class="schedule-table">
-                <thead>
-                  <tr>
-                    <th>{{ t('time') }}</th>
-                    <th>{{ t('busNo') }} / {{ t('busCompany') }}</th>
-                    <th>{{ t('routeNumber') }}</th>
-                    <th>{{ t('destination') }}</th>
-                    <th>{{ t('remarks') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let dep of departureDisplayRows; let rowIndex = index" [class.has-indicator]="dep?.indicator">
-                    <ng-container *ngIf="dep; else emptyScheduleDeparture">
-                      <td>
-                        <span class="indicator" *ngIf="dep.indicator">●</span>
-                        {{ dep.time }}
-                      </td>
-                      <td class="bus-details">
-                        <span class="bus-number">{{ dep.busNo || 'TBA' }}</span>
-                        <span class="bus-company">{{ dep.busCompanyName || t('companyTba') }}</span>
-                      </td>
-                      <td>{{ dep.routeNo }}</td>
-                      <td>{{ dep.destination }}</td>
-                      <td>
-                        <span class="remark" [ngClass]="dep.status">{{ dep.remarks }}</span>
-                      </td>
-                    </ng-container>
-                    <ng-template #emptyScheduleDeparture>
-                      <td colspan="5">{{ rowIndex === 0 && !departures.length && !loading ? (noTripsScheduledToday ? t('noTripsScheduledToday') : t('noDepartures')) : '' }}</td>
-                    </ng-template>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="schedule-page-indicator" *ngIf="departurePageLabel" aria-live="polite">
-              {{ departurePageLabel }}
-            </div>
-          </div>
-
-          <!-- Arrivals Section -->
-          <div class="section arrivals-section">
-            <div class="section-header">{{ t('arrivals') }}</div>
-            <div class="table-wrapper">
-              <table class="schedule-table">
-                <thead>
-                  <tr>
-                    <th>{{ t('time') }}</th>
-                    <th>{{ t('busNo') }} / {{ t('busCompany') }}</th>
-                    <th>{{ t('routeNumber') }}</th>
-                    <th>{{ t('origin') }}</th>
-                    <th>{{ t('remarks') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let arr of arrivalDisplayRows; let rowIndex = index" [class.has-indicator]="arr?.indicator">
-                    <ng-container *ngIf="arr; else emptyScheduleArrival">
-                      <td>
-                        <span class="indicator" *ngIf="arr.indicator">●</span>
-                        {{ arr.time }}
-                      </td>
-                      <td class="bus-details">
-                        <span class="bus-number">{{ arr.busNo || 'TBA' }}</span>
-                        <span class="bus-company">{{ arr.busCompanyName || t('companyTba') }}</span>
-                      </td>
-                      <td>{{ arr.routeNo }}</td>
-                      <td>{{ arr.origin }}</td>
-                      <td>
-                        <span class="remark" [ngClass]="arr.status">{{ arr.remarks }}</span>
-                      </td>
-                    </ng-container>
-                    <ng-template #emptyScheduleArrival>
-                      <td colspan="5">{{ rowIndex === 0 && !arrivals.length && !loading && !noTripsScheduledToday ? t('noArrivals') : '' }}</td>
-                    </ng-template>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="schedule-page-indicator" *ngIf="arrivalPageLabel" aria-live="polite">
-              {{ arrivalPageLabel }}
-            </div>
-          </div>
-        </div>
-      </div>
-    </ng-container>
-
-    <!-- Ads Only Mode: Full screen looping ads -->
-    <ng-container *ngIf="currentDisplayMode === 'ads'">
-      <div class="ads-only-container" *ngIf="currentAdvertisement">
-        <img *ngIf="currentAdvertisement.mediaType === 'image'" [src]="currentAdvertisement.mediaUrl" [alt]="currentAdvertisement.name" />
-        <video *ngIf="currentAdvertisement.mediaType === 'video'" [src]="currentAdvertisement.mediaUrl" autoplay muted loop playsinline (error)="onAdVideoError(currentAdvertisement)"></video>
-        <div class="ads-only-caption">{{ currentAdvertisement.name }}</div>
-      </div>
-      <div class="ads-only-placeholder" *ngIf="!currentAdvertisement">
-        <p>No advertisements available</p>
-      </div>
-    </ng-container>
+    </aside>
   </div>
 
-  <div class="footer" *ngIf="!isHybridAlternateAdDisplay">
-    <div class="footer-text">{{ t('footerText') }}</div>
+  <!-- ===================== 4d · Ad view (alternate ad phase) ===================== -->
+  <div class="ad-view" *ngIf="activeView === 'ad'">
+    <header class="ad-strip">
+      <div class="strip-clock">
+        <div class="clock">{{ clockHourMinute }}</div>
+        <div class="header-date">{{ dateShort }}</div>
+      </div>
+
+      <div class="strip-next">
+        <ng-container *ngIf="nextDeparture as dep; else noNextDeparture">
+          <div class="strip-bus">
+            <span class="op-badge" [attr.data-operator]="operatorKind(dep.busCompanyName)"><kiosk-marquee [text]="operatorLabel(dep.busCompanyName)"></kiosk-marquee></span>
+            <span class="strip-route">{{ dep.routeNo }}</span>
+          </div>
+          <div class="strip-info">
+            <kiosk-marquee class="strip-label" [text]="t('nextBusLeaving') + ' · ' + dep.time"></kiosk-marquee>
+            <kiosk-marquee class="strip-place" [text]="dep.destination"></kiosk-marquee>
+          </div>
+          <kiosk-marquee class="strip-remark remark" [attr.data-tone]="remarkTone(dep.remarks)" [text]="dep.remarks"></kiosk-marquee>
+        </ng-container>
+        <ng-template #noNextDeparture>
+          <div class="strip-empty">{{ emptyMessage('departures') || t('noDepartures') }}</div>
+        </ng-template>
+      </div>
+
+      <div class="strip-next">
+        <ng-container *ngIf="nextArrival as arr; else noNextArrival">
+          <div class="strip-bus">
+            <span class="op-badge" [attr.data-operator]="operatorKind(arr.busCompanyName)"><kiosk-marquee [text]="operatorLabel(arr.busCompanyName)"></kiosk-marquee></span>
+            <span class="strip-route">{{ arr.routeNo }}</span>
+          </div>
+          <div class="strip-info">
+            <kiosk-marquee class="strip-label" [text]="t('nextArrival') + ' · ' + arr.time"></kiosk-marquee>
+            <kiosk-marquee class="strip-place" [text]="fromPlace(arr.origin)"></kiosk-marquee>
+          </div>
+          <kiosk-marquee class="strip-remark remark" [attr.data-tone]="remarkTone(arr.remarks)" [text]="arr.remarks"></kiosk-marquee>
+        </ng-container>
+        <ng-template #noNextArrival>
+          <div class="strip-empty">{{ emptyMessage('arrivals') || t('noArrivals') }}</div>
+        </ng-template>
+      </div>
+    </header>
+
+    <div class="ad-stage">
+      <ng-container *ngIf="adViewAd as ad; else adViewEmpty">
+        <ng-container *ngTemplateOutlet="adMedia; context: { $implicit: ad }"></ng-container>
+      </ng-container>
+      <ng-template #adViewEmpty>
+        <div class="ad-placeholder">{{ t('noAdsForSlot') }}</div>
+      </ng-template>
+      <span class="ad-tag bottom-left">{{ t('advertisement') }}</span>
+      <span class="ad-tag bottom-right accent" *ngIf="adViewCountdownSec > 0">{{ tf('busTimesBackIn', adViewCountdownSec) }}</span>
+    </div>
   </div>
 
-  <ng-container *ngIf="currentAdvertisement as ad">
-    <div class="ad-playback-overlay" *ngIf="isAdPlaying && currentDisplayMode === 'both' && currentLayoutMode === 'alternate' && !isAlternateAdPhase">
-      <div class="ad-playback-frame">
-        <img *ngIf="ad.mediaType === 'image'" [src]="ad.mediaUrl" [alt]="ad.name" />
-        <video *ngIf="ad.mediaType === 'video'" [src]="ad.mediaUrl" autoplay muted loop playsinline (error)="onAdVideoError(ad)"></video>
+  <!-- ===================== Ads-only mode ===================== -->
+  <div class="ads-only-view" *ngIf="activeView === 'adsOnly'">
+    <ng-container *ngIf="currentAdvertisement as ad; else adsOnlyEmpty">
+      <ng-container *ngTemplateOutlet="adMedia; context: { $implicit: ad }"></ng-container>
+    </ng-container>
+    <ng-template #adsOnlyEmpty>
+      <div class="ad-placeholder">{{ t('noAdsAvailable') }}</div>
+    </ng-template>
+    <span class="ad-tag bottom-left">{{ t('advertisement') }}</span>
+  </div>
+</div>
+
+<!-- ===================== Shared templates ===================== -->
+
+<ng-template #statusLines>
+  <div class="broadcast-banner" *ngIf="activeBroadcastMessage as broadcast">
+    <span class="broadcast-pill" [attr.data-priority]="broadcast.priority">Broadcast</span>
+    <kiosk-marquee class="broadcast-text" [text]="broadcast.message"></kiosk-marquee>
+  </div>
+  <div class="schedule-notice" *ngIf="error">{{ error }}</div>
+</ng-template>
+
+<ng-template #boardPanel let-kind let-rows="rows" let-pageLabel="pageLabel" let-compact="compact">
+  <section class="board-panel" [class.compact]="compact" [attr.data-kind]="kind">
+    <div class="panel-bar">
+      <div class="panel-heading">
+        <h2 class="panel-title">{{ kind === 'departures' ? t('departures') : t('arrivals') }}</h2>
+        <span class="panel-subtitle">
+          {{ kind === 'departures' ? t('leavingFromHere') : t('comingIn') }}<ng-container *ngIf="pageLabel"> · {{ pageLabel }}</ng-container>
+        </span>
+      </div>
+      <div class="panel-tabs" *ngIf="compact" aria-hidden="true">
+        <span class="panel-tab" [class.active]="kind === 'departures'">{{ t('departures') }}</span>
+        <span class="panel-tab" [class.active]="kind === 'arrivals'">{{ t('arrivals') }}</span>
+      </div>
+      <span class="panel-progress" *ngIf="compact" [style.width.%]="splitPanelProgress"></span>
+    </div>
+
+    <div class="board-grid board-head">
+      <kiosk-marquee [text]="t('operator')"></kiosk-marquee>
+      <kiosk-marquee [text]="t('time')"></kiosk-marquee>
+      <kiosk-marquee [text]="kind === 'departures' ? t('goingTo') : t('comingFrom')"></kiosk-marquee>
+      <kiosk-marquee [text]="t('bus')"></kiosk-marquee>
+      <kiosk-marquee [text]="t('remark')"></kiosk-marquee>
+    </div>
+
+    <div class="board-body" [style.--rows]="maxVisibleScheduleRows">
+      <div class="board-grid board-row"
+           *ngFor="let row of rows; let i = index; trackBy: trackScheduleRow"
+           [class.empty]="!row">
+        <ng-container *ngIf="row; else emptyRow">
+          <span class="op-badge" [attr.data-operator]="operatorKind(row.busCompanyName)"><kiosk-marquee [text]="operatorLabel(row.busCompanyName)"></kiosk-marquee></span>
+          <span class="cell-time">{{ row.time }}</span>
+          <kiosk-marquee class="cell-place" [text]="kind === 'departures' ? row.destination : row.origin"></kiosk-marquee>
+          <kiosk-marquee class="cell-bus" [text]="row.routeNo"></kiosk-marquee>
+          <kiosk-marquee class="cell-remark remark" [attr.data-tone]="remarkTone(row.remarks)" [text]="row.remarks"></kiosk-marquee>
+        </ng-container>
+        <ng-template #emptyRow>
+          <span class="row-message">{{ i === 0 ? emptyMessage(kind) : '' }}</span>
+        </ng-template>
       </div>
     </div>
-  </ng-container>
-</div>
+  </section>
+</ng-template>
+
+<ng-template #adMedia let-ad>
+  <img *ngIf="ad.mediaType === 'image'" class="ad-media" [src]="ad.mediaUrl" [alt]="ad.name" />
+  <video *ngIf="ad.mediaType === 'video'" class="ad-media" [src]="ad.mediaUrl" autoplay muted loop playsinline (error)="onAdVideoError($any(ad))"></video>
+</ng-template>

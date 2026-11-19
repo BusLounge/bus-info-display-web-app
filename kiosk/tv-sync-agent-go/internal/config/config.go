@@ -42,6 +42,7 @@ func Load(path string) (models.Config, error) {
 		cfg.SyncFrequencySeconds = 30
 	}
 	cfg.DisplayResolution = normalizeDisplayResolution(cfg.DisplayResolution)
+	cfg.DisplayOrientation = normalizeDisplayOrientation(cfg.DisplayOrientation)
 
 	purpose := strings.ToLower(strings.TrimSpace(cfg.TVPurpose))
 	switch purpose {
@@ -75,18 +76,41 @@ func Load(path string) (models.Config, error) {
 	return cfg, nil
 }
 
+// normalizeDisplayResolution returns "auto" or a "WIDTHxHEIGHT" canvas size.
+// The kiosk display draws on that canvas and scales it to fit the screen, so
+// any sensible size is allowed; anything else falls back to "auto".
 func normalizeDisplayResolution(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "1280x720", "1280 × 720", "720p", "hd":
+	v := strings.ToLower(strings.TrimSpace(value))
+	v = strings.ReplaceAll(v, "×", "x")
+	v = strings.ReplaceAll(v, " ", "")
+	switch v {
+	case "720p", "hd":
 		return "1280x720"
-	case "1920x1080", "1920 × 1080", "1080p", "fullhd", "full hd":
+	case "1080p", "fullhd":
 		return "1920x1080"
-	case "3840x2160", "3840 × 2160", "4k", "4k ultra hd":
+	case "4k", "4kultrahd", "7680x4320", "8k", "8kultrahd":
+		// An 8K canvas would show ~66 tiny rows; 4K is the largest preset.
 		return "3840x2160"
-	case "7680x4320", "7680 × 4320", "8k", "8k ultra hd":
-		return "7680x4320"
+	}
+	m := displayResolutionPattern.FindStringSubmatch(v)
+	if len(m) == 3 {
+		width, _ := strconv.Atoi(m[1])
+		height, _ := strconv.Atoi(m[2])
+		if width >= 640 && height >= 480 && width <= 3840 && height <= 3840 {
+			return fmt.Sprintf("%dx%d", width, height)
+		}
+	}
+	return "auto"
+}
+
+var displayResolutionPattern = regexp.MustCompile(`^(\d{3,4})x(\d{3,4})$`)
+
+func normalizeDisplayOrientation(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "portrait", "portrait-primary":
+		return "portrait"
 	default:
-		return "1920x1080"
+		return "landscape"
 	}
 }
 

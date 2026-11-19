@@ -106,11 +106,11 @@ const intentionallyStoppedGoProcesses = new WeakSet();
 const GO_RESTART_BASE_DELAY_MS = 3000;
 const GO_RESTART_MAX_DELAY_MS = 60000;
 
-const DISPLAY_RESOLUTION_PRESETS = {
-  '1280x720': { width: 1280, height: 720 },
-  '1920x1080': { width: 1920, height: 1080 },
-  '3840x2160': { width: 3840, height: 2160 },
-  '7680x4320': { width: 7680, height: 4320 },
+// Display "resolution" is the canvas the kiosk draws on. 'auto' fills the
+// screen; 'WIDTHxHEIGHT' draws that canvas and scales it to fit the screen
+// with black bars. Bigger canvases fit more rows (see admin.html).
+const LEGACY_DISPLAY_RESOLUTIONS = {
+  '7680x4320': '3840x2160', // 8K canvas would show ~66 tiny rows; use 4K instead
 };
 
 function normalizeSyncFrequencySeconds(value) {
@@ -122,8 +122,15 @@ function normalizeSyncFrequencySeconds(value) {
 }
 
 function normalizeDisplayResolution(value) {
-  const resolution = String(value || '').trim();
-  return DISPLAY_RESOLUTION_PRESETS[resolution] ? resolution : '1920x1080';
+  const resolution = String(value || '').trim().toLowerCase().replace(/\s+/g, '').replace('×', 'x');
+  if (LEGACY_DISPLAY_RESOLUTIONS[resolution]) return LEGACY_DISPLAY_RESOLUTIONS[resolution];
+  const match = /^(\d{3,4})x(\d{3,4})$/.exec(resolution);
+  if (match) {
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    if (width >= 640 && height >= 480 && width <= 3840 && height <= 3840) return `${width}x${height}`;
+  }
+  return 'auto';
 }
 
 function normalizeDisplayOrientation(value) {
@@ -332,7 +339,7 @@ function startGoProcess() {
                 serverUrl: "http://18.140.238.163:4000",
                 apiBaseUrl: "http://18.140.238.163:4000/api",
                 syncFrequencySeconds: 30,
-                displayResolution: "1920x1080",
+                displayResolution: "auto",
                 displayOrientation: "landscape",
                 localBridgePort: DEFAULT_LOCAL_BRIDGE_PORT
             };
@@ -490,7 +497,15 @@ function getDisplayUrl() {
     const loungeName = String(config.loungeGroup || '').trim();
 
     if (loungeId) {
-      const params = new URLSearchParams({ loungeId, loungeName, kiosk: 'true' });
+      const params = new URLSearchParams({
+        loungeId,
+        loungeName,
+        kiosk: 'true',
+        // Passed up front so the display opens at the right size and
+        // orientation instead of flashing landscape until status arrives.
+        displayResolution: normalizeDisplayResolution(config.displayResolution),
+        displayOrientation: normalizeDisplayOrientation(config.displayOrientation),
+      });
       displayUrl += `?${params.toString()}`;
     }
   } catch (error) {

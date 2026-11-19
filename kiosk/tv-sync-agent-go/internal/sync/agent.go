@@ -63,6 +63,7 @@ func New(cfg models.Config) *Agent {
 			LayoutMode:           "split",
 			SyncFrequencySeconds: cfg.SyncFrequencySeconds,
 			DisplayResolution:    cfg.DisplayResolution,
+			DisplayOrientation:   cfg.DisplayOrientation,
 			BroadcastsEnabled:    true,
 			ScheduleEnabled:      cfg.ScheduleEnabled(),
 			AdsEnabled:           cfg.AdsEnabled(),

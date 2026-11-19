@@ -20,6 +20,7 @@ type Config struct {
 	LayoutMode            string `json:"layoutMode"`
 	SyncFrequencySeconds  int    `json:"syncFrequencySeconds"`
 	DisplayResolution     string `json:"displayResolution"`
+	DisplayOrientation    string `json:"displayOrientation"`
 	TVPurpose             string `json:"tvPurpose"`
 	ScheduleIntervalCron  string `json:"scheduleIntervalCron"`
 	AdsIntervalCron       string `json:"adsIntervalCron"`
@@ -195,6 +196,7 @@ type AgentStatus struct {
 	LayoutMode           string    `json:"layoutMode"`
 	SyncFrequencySeconds int       `json:"syncFrequencySeconds"`
 	DisplayResolution    string    `json:"displayResolution"`
+	DisplayOrientation   string    `json:"displayOrientation"`
 	BroadcastsEnabled    bool      `json:"broadcastsEnabled"`
 	ScheduleEnabled      bool      `json:"scheduleEnabled"`
 	AdsEnabled           bool      `json:"adsEnabled"`
